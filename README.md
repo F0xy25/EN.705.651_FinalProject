@@ -8,9 +8,9 @@
 
 
 Contributors:
-Gavin Fox
-Catherine Johnson
-Marc Roube
-Charles Mackey
+- Gavin Fox
+- Catherine Johnson
+- Marc Roube
+- Charles Mackey
 
 
