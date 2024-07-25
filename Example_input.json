@@ -1,0 +1,33 @@
+{
+    "USER_ID": "1",
+    "Preferences": {
+        "Text Preference": "For this event, I would prefer the temperature to be around 75 degrees, as it provides a comfortable atmosphere. I would also like the light intensity to be set at 500, creating a vibrant and energetic ambiance. In terms of volume level, I would prefer it to be moderate, allowing me to enjoy the music without it being too overwhelming. As for the crowd density, I would prefer it to be medium, striking a balance between a lively atmosphere and personal space. I would love to be in the front of the crowd, as it offers a closer and more immersive experience. In terms of music taste, I enjoy a mix of pop, rock, and hip-hop genres. Lastly, I don't have any specific food preferences for this event. I'm looking forward to an amazing experience!",
+        "Temperature": 75, 
+        "Light Intensity": 500, 
+        "Volume Level": "Moderate",
+        "Crowd Density": "Medium",
+        "Crowd Location": "Front",
+        "Music Taste": ["Pop", "Rock","Hip-Hop"],
+        "Food": "None"},
+
+    "Metadata": {
+        "Location": "7A",
+        "Entry Time": "2024-07-25T12:00:00",
+        "Follow Up Survey": {
+            "Survey ID": "1",
+            "Survey Time": "2024-07-25T12:30:00",
+            "Survey Status": "Complete",
+            "Survey Results": {
+                "Temperature": 75,
+                "Light Intensity": 500,
+                "Volume Level": "Moderate",
+                "Crowd Density": "Medium",
+                "Crowd Location": "Front",
+                "Music Taste": ["Pop", "Rock","Hip-Hop"],
+                "Food": "None",
+                "Overall Experience": "Amazing",
+                "Suggestions": "The event was fantastic! The temperature, light intensity, and crowd density were perfect. The music selection was great, and I had a wonderful time at the front of the crowd. I enjoyed the event and look forward to attending more in the future."
+            }
+        }
+    }
+}
