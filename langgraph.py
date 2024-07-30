@@ -346,7 +346,7 @@ workflow.add_node("Node 1: Changing Environment Simulation Node", call_node_1)
 workflow.add_node("Node 2: User Sentiment Simulation Node", call_node_2)
 workflow.add_node("Node 3: Sentiment Analysis Node", call_node_3)
 workflow.add_node("Node 4: Environment Updater Node", call_node_4)
-workflow.add_node("Node 5: Tool Node", tool_node)
+workflow.add_node("Node 5: Tool Node", call_node_5)
 
 
 
