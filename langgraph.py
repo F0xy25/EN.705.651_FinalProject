@@ -395,8 +395,6 @@ workflow.add_edge(
 workflow.add_conditional_edges(
     "Node 3: Sentiment Analysis Node", guest_sentiment_condition, {"Node 1: Changing Environment Simulation Node": "Node 1: Changing Environment Simulation Node", "Node 4: Environment Updater Node": "Node 4: Environment Updater Node"})
 workflow.add_edge(
-    "Node 4: Environment Updater Node", "Node 2: User Sentiment Simulation Node")
-workflow.add_edge(
     "Node 4: Environment Updater Node", "Node 5: Tool Node")
 workflow.add_edge(
     "Node 5: Tool Node", "Node 2: User Sentiment Simulation Node")
