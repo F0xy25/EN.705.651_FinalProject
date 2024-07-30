@@ -33,7 +33,7 @@ class State(TypedDict):
     # Agent Workflow State Variables
     event_duration_iterator: int   # Used to simulate if the event is over and to the end system loop or not
     current_sentiment: str         # Output by Node 2 User Sentiment Simulation Node
-    guests_happy: bool             # Sentiment Analys output by Node 3 Sentiment Analysis Node to route the output to either Node 1 or 4. True is Happy, False is Sad.
+    guests_happy: bool             # Sentiment Analysis output by Node 3 Sentiment Analysis Node to route the output to either Node 1 or 4. True is Happy, False is Sad.
     all_functions: dict            # All the functions that can be used
     function_name: str             # Name of the function to be called
     target_value: float            # The value to call the chosen function with
@@ -51,7 +51,8 @@ def update_temp(state):
     state_update = get_min_max_update(state, state_param)
     if state_update is not None:
         state[state_param] = state_update
-    return state.update({"temperature": state_update})
+    state.update({"temperature": state_update})
+    return state
 
 def update_lights_lux(state):
     "to be called if the lights are causing the unhappiness of the guests"
@@ -61,7 +62,8 @@ def update_lights_lux(state):
     state_update = get_min_max_update(state, state_param, current_location)
     if state_update is not None:
         state[state_param][current_location] = state_update
-    return state.update({"lights": state_update})
+    state.update({"lights": state_update})
+    return state
 
 def change_music_volume(state):
     "to be called if the music is causing the unhappiness of the guests"
@@ -70,7 +72,8 @@ def change_music_volume(state):
     if state_update is not None:
         state[state_param] = state_update
     
-    return state.update({"music_volume": state_update})
+    state.update({"music_volume": state_update})
+    return state
 
 def update_room_location(state):
     "to be called if the room location is causing the unhappiness of the guests"
@@ -83,14 +86,17 @@ def update_room_location(state):
     other_locations = [location.name for location in EventLocation if location.name != state['room_location']]
     for location in other_locations:
         state['lights'][location] = 50
-    return state.update({"": ""})   # NOT SURE WHAT TO RETURN HERE
+    state.update({"": ""})   # NOT SURE WHAT TO RETURN HERE
+    return state
 
 def make_announcement(state):
-    return state.update({"announcement": state['prediction_detail']['language_update']})
+    state.update({"announcement": state['prediction_detail']['language_update']})
+    return state
 
 def skip_song(state):
     # assumed that this is a skip, but it could include more complex requests
-    return state.update({"music_playlist": state['music_playlist'][1:]})
+    state.update({"music_playlist": state['music_playlist'][1:]})
+    return state
 
 tools = {"update_temp": update_temp, "update_lights_lux": update_lights_lux, "change_music_volume": change_music_volume, "update_room_location": update_room_location, "make_announcement": make_announcement, "skip_song": skip_song}
 
@@ -102,7 +108,6 @@ tools = {"update_temp": update_temp, "update_lights_lux": update_lights_lux, "ch
 class Node2OutputSchema(BaseModel):
     """Given your preferences, a sentiment that is either positive or negative about how you feel right now"""
     current_sentiment: str
-
 
 class Node3OutputSchema(BaseModel):
     """Your determination as a boolean, whether or not the sentiment presented to you is postive or negative"""
@@ -202,7 +207,6 @@ def call_node_2(state):
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES"], 
         template=prompt_template
     )
-
     
 
     llm = ChatOpenAI(model="gpt-4o")
@@ -318,6 +322,7 @@ def call_node_4(state):
 
     Remember, your goal is to improve the event experience by making data-driven decisions based on the provided information."""
     
+
     PROMPT = PromptTemplate(
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS"], 
         template=prompt_template
@@ -393,6 +398,8 @@ workflow.add_edge(
     "Node 4: Environment Updater Node", "Node 2: User Sentiment Simulation Node")
 workflow.add_edge(
     "Node 4: Environment Updater Node", "Node 5: Tool Node")
+workflow.add_edge(
+    "Node 5: Tool Node", "Node 2: User Sentiment Simulation Node")
 
 
 
