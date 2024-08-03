@@ -5,8 +5,9 @@ from langchain.prompts.prompt import PromptTemplate
 from langchain.pydantic_v1 import BaseModel, conlist
 from input_schema_and_utility import get_random_val_within_range, switch_location_randomly, EventLocation
 import random
-# from langgraph.graph import StateGraph
+import os
 
+# from langgraph.graph import StateGraph
 # ========================================================================
 # State
 class BuildingEventState(TypedDict):
@@ -62,7 +63,9 @@ class State(TypedDict):
     max_optimum: BuildingEventState
     initialized: bool
 
-
+os.environ['OPENAI_API_KEY'] = ""
+ENVIRONMENT_VALUES = {}
+OPTIMAL_RANGES = {}
 workflow = StateGraph(State)
 
 
@@ -125,8 +128,6 @@ tools = {
     "make_announcement": make_announcement,
     "ff_genre": ff_genre
 }
-
-
 
 # ========================================================================
 # Pydantic Output Schemas
@@ -442,8 +443,6 @@ workflow.add_edge(
     "Node 4: Environment Updater Node", "Node 5: Tool Node")
 workflow.add_edge(
     "Node 5: Tool Node", "Node 2: User Sentiment Simulation Node")
-
-
 
 
 
