@@ -23,10 +23,32 @@ class BuildingEventState(TypedDict):
     genre: list  # List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
     location: str # Location of the event in the building
 
+
+# This is currently a duplicate of Building Event States but eventually it will
+# become a signal source for default min + max optimal values for the BES.
+class GroupPreferences(TypedDict):
+    genre: str
+    temperature: float
+    light_intensity: int
+    volume: int
+    genre: list
+    location: str
+
+    @classmethod
+    def with_defaults(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
+                      volume: int = 5) -> "GroupPreferences":
+        return cls(
+            genre=genres,
+            temperature=temperature,
+            light_intensity=light_intensity,
+            volume=volume,
+        )
+
+
 class State(TypedDict):
     #Input Schema for the State Graph (Used to ingest user data and influence the state graph)
     User_id: int                   #Unique User ID
-    preferences: dict              #User preferences (genre, temperature, light_intensity, volume, etc.)
+    group_preferences: GroupPreferences #User preferences (genre, temperature, light_intensity, volume, etc.)
     metadata: dict                 #Any other information (Location, Entry Time, ,etc.)
 
     #State Schema to be used for any building event state updates (ENVIRONMENT_VALUES)
@@ -45,6 +67,8 @@ class State(TypedDict):
     target_value: float            # The value to call the chosen function with
     min_optimum: BuildingEventState
     max_optimum: BuildingEventState
+    initialized: bool
+
 
 workflow = StateGraph(State)
 
@@ -111,7 +135,6 @@ tools = {
 
 
 
-
 # ========================================================================
 # Pydantic Output Schemas
 
@@ -138,7 +161,7 @@ class Node4OutputSchema(BaseModel):
 # ========================================================================
 # Nodes
 # EXPLANATION #
-    # 1.(NO-LLM) Changing Environment Simulation Node: 
+    # 1.(NO-LLM) Changing Environment Simulation Node:
     #            Runs a function that randomly change state variables
 
     # 2.(LLM)    User Sentiment Simulation Node: 
@@ -162,22 +185,22 @@ class Node4OutputSchema(BaseModel):
     # 6. FINISH
 
 
-# 0.(NO-LLM) Initialize state values to be in the optimal ranges:
-def call_node_0(state):
-    # randomly choose a function from all_functions (a dictionary with the function name as a string as key, and the function itself as a value)
-    # that randomizes the value of a certain state variable update the state with that new value
-    all_functions = state["all_functions"]
-    random_function = random.choice(list(all_functions.values()))
-    state = random_function()
-
-    event_duration_iterator = state["event_duration_iterator"] # to simulate how long the event is
-    event_duration_iterator += 1
-
-    state.update({"event_duration_iterator": event_duration_iterator})
-    return state
-
 # 1.(NO-LLM) Changing Environment Simulation Node: 
 def call_node_1(state):
+    # initialize everything if the state is not been set.
+    # eventually min optimum + max optimum will be in a prediction node.
+    if not state["initialized"]:
+        all_functions = state["all_functions"]
+        for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]):
+            state['min_optimum'].update({key: value})
+            state['max_optimum'].update({key: value})
+
+        # Set all building event variables from the optimal ranges
+        for function in all_functions:
+            function(state, initialize=True)
+    state.update({"initialized": True})
+
+
     # randomly choose a function from all_functions (a dictionary with the function name as a string as key, and the function itself as a value)
     # that randomizes the value of a certain state variable update the state with that new value
     all_functions = state["all_functions"]
