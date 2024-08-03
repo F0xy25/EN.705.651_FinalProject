@@ -1,18 +1,11 @@
-from typing import Annotated, Literal, TypedDict
-from langchain_core.messages import HumanMessage
+from typing import TypedDict
 from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-from langgraph.checkpoint import MemorySaver
 from langgraph.graph import END, StateGraph, MessagesState
 from langchain.prompts.prompt import PromptTemplate
-from langgraph.prebuilt import ToolNode
-from langchain_core.output_parsers import StrOutputParser
 from langchain.pydantic_v1 import BaseModel, conlist
-import functools
-from langchain_core.messages import AIMessage
 from input_schema_and_utility import get_random_val_within_range, switch_location_randomly, EventLocation
 import random
-
+# from langgraph.graph import StateGraph
 
 # ========================================================================
 # State
@@ -102,7 +95,7 @@ def update_room_location(state: State, initialize=False):
   if initialize:
     state['building_event_state'].update({"location": EventLocation.RECEPTION.name})
   else:
-    state['building_event_state'].update({"location": switch_location_randomly(state['location'])})
+    state['building_event_state'].update({"location": switch_location_randomly(state['building_event_state']['location'])})
   # set a default for this
   update_lights_lux(state, initialize=True)
   # dim other room lights
@@ -113,7 +106,7 @@ def update_room_location(state: State, initialize=False):
 
 def make_announcement(state: State, initialize=False):
   announcement = "Welcome to the event!" if initialize else state["target_value"]
-  state['building_event_state']['building_event_state'].update({"announcement": announcement})
+  state['building_event_state'].update({"announcement": announcement})
 
 
 def ff_genre(state: State, initialize=False):
@@ -191,12 +184,16 @@ def call_node_1(state):
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
         all_functions = state["all_functions"]
-        for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]):
+        state['building_event_state'] = BuildingEventState()
+        state['min_optimum'] = GroupPreferences.with_defaults(["jazz", "hip-hop"])
+        state['max_optimum'] = GroupPreferences.with_defaults(["jazz", "hip-hop"])
+        state['event_duration_iterator'] = 0
+        for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
             state['min_optimum'].update({key: value})
             state['max_optimum'].update({key: value})
 
         # Set all building event variables from the optimal ranges
-        for function in all_functions:
+        for function in all_functions.values():
             function(state, initialize=True)
     state.update({"initialized": True})
 
@@ -205,9 +202,10 @@ def call_node_1(state):
     # that randomizes the value of a certain state variable update the state with that new value
     all_functions = state["all_functions"]
     random_function = random.choice(list(all_functions.values()))
-    state = random_function()
+    # TODO: This isn't returning the state + needs updating.
+    # state = random_function(state)
 
-    event_duration_iterator = state["event_duration_iterator"] # to simulate how long the event is
+    event_duration_iterator = state.get('event_duration_iterator') # to simulate how long the event is
     event_duration_iterator += 1
 
     state.update({"event_duration_iterator": event_duration_iterator})

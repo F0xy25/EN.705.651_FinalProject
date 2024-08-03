@@ -58,7 +58,7 @@ def get_optimal_range(state: State, key, subkey=None):
 
 def get_random_val_within_range(state: State, state_param, subkey=None):
   predicted_min_optimum, predicted_max_optimum = get_optimal_range(state, state_param) if subkey is None else get_optimal_range(state, state_param, subkey)
-  return random.randrange(predicted_min_optimum, predicted_max_optimum + 1)
+  return random.randrange(int(predicted_min_optimum), int(predicted_max_optimum) + 1)
 
 
 def switch_location_randomly(existing_location):
