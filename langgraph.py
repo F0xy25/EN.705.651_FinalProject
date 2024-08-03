@@ -10,21 +10,27 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.pydantic_v1 import BaseModel, conlist
 import functools
 from langchain_core.messages import AIMessage
+from input_schema_and_utility import get_random_val_within_range, switch_location_randomly, EventLocation
 import random
+
 
 # ========================================================================
 # State
+class BuildingEventState(TypedDict):
+    temperature: float  # Temperature in Farenheit (60-85)
+    light_intensity: int  # Light intensity in lumens (0-1000)
+    volume: int  # In Decibels (70-120)
+    genre: list  # List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
+    location: str # Location of the event in the building
+
 class State(TypedDict):
     #Input Schema for the State Graph (Used to ingest user data and influence the state graph)
     User_id: int                   #Unique User ID
     preferences: dict              #User preferences (genre, temperature, light_intensity, volume, etc.)
     metadata: dict                 #Any other information (Location, Entry Time, ,etc.)
 
-    #State Schema to be used for any environmental state updates
-    temperature: float             #Temperature in Farenheit (60-85)
-    light_intensity: int           #Light intensity in lumens (0-1000)
-    volume: int                    #In Decibels (70-120)
-    genre: list                    #List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
+    #State Schema to be used for any building event state updates (ENVIRONMENT_VALUES)
+    building_event_state: BuildingEventState
 
     #State Schema for Security Bot
     robot_id: int                  #Unique Robot ID
@@ -37,7 +43,8 @@ class State(TypedDict):
     all_functions: dict            # All the functions that can be used
     function_name: str             # Name of the function to be called
     target_value: float            # The value to call the chosen function with
-
+    min_optimum: BuildingEventState
+    max_optimum: BuildingEventState
 
 workflow = StateGraph(State)
 
@@ -45,60 +52,63 @@ workflow = StateGraph(State)
 # ========================================================================
 # Tools
 
-def update_temp(state):
-    "to be called if the temperature is causing the unhappiness of the guests"
-    state_param = 'temperature'
-    state_update = get_min_max_update(state, state_param)
-    if state_update is not None:
-        state[state_param] = state_update
-    state.update({"temperature": state_update})
-    return state
+def update_temp(state: State, initialize=False):
+  state_param = 'temperature'
+  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
+  if state_update is not None:
+    state['building_event_state'].update({state_param: state_update})
 
-def update_lights_lux(state):
-    "to be called if the lights are causing the unhappiness of the guests"
-    # Lights are associated with a location + in the range: 100 - 1000 lux
-    state_param = 'lights'
-    current_location = state['room_location']
-    state_update = get_min_max_update(state, state_param, current_location)
-    if state_update is not None:
-        state[state_param][current_location] = state_update
-    state.update({"lights": state_update})
-    return state
 
-def change_music_volume(state):
-    "to be called if the music is causing the unhappiness of the guests"
-    state_param = 'music_volume'
-    state_update = get_min_max_update(state, state_param)
-    if state_update is not None:
-        state[state_param] = state_update
-    
-    state.update({"music_volume": state_update})
-    return state
+def update_lights_lux(state: State, initialize=False):
+  # Lights are associated with a location + in the range: 100 - 1000 lux
+  state_param = 'light_intensity'
+  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
+  if state_update is not None:
+    state['building_event_state'].update({state_param: state_update})
 
-def update_room_location(state):
-    "to be called if the room location is causing the unhappiness of the guests"
-    state['room_location'] = switch_location_randomly(state['room_location'])
-    test = update_lights_lux(state)
-    # set a default for this
-    update_lights_lux(state)
-    # dim other room lights
 
-    other_locations = [location.name for location in EventLocation if location.name != state['room_location']]
-    for location in other_locations:
-        state['lights'][location] = 50
-    state.update({"": ""})   # NOT SURE WHAT TO RETURN HERE
-    return state
+def change_music_volume(state: State, initialize=False):
+  state_param = 'volume'
+  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
+  if state_update is not None:
+    state['building_event_state'].update({state_param: state_update})
 
-def make_announcement(state):
-    state.update({"announcement": state['prediction_detail']['language_update']})
-    return state
 
-def skip_song(state):
-    # assumed that this is a skip, but it could include more complex requests
-    state.update({"music_playlist": state['music_playlist'][1:]})
-    return state
+def update_room_location(state: State, initialize=False):
+  if initialize:
+    state['building_event_state'].update({"location": EventLocation.RECEPTION.name})
+  else:
+    state['building_event_state'].update({"location": switch_location_randomly(state['location'])})
+  # set a default for this
+  update_lights_lux(state, initialize=True)
+  # dim other room lights
+  other_locations = [location.name for location in EventLocation if location.name != state['building_event_state']['location']]
+  for _ in other_locations:
+    state['building_event_state'].update({'light_intensity': 50})
 
-tools = {"update_temp": update_temp, "update_lights_lux": update_lights_lux, "change_music_volume": change_music_volume, "update_room_location": update_room_location, "make_announcement": make_announcement, "skip_song": skip_song}
+
+def make_announcement(state: State, initialize=False):
+  announcement = "Welcome to the event!" if initialize else state["target_value"]
+  state['building_event_state']['building_event_state'].update({"announcement": announcement})
+
+
+def ff_genre(state: State, initialize=False):
+  if initialize or len(state['building_event_state']['genre']) == 1:
+    # set up playlist
+    state['building_event_state'].update({"genre": ['genre_1', 'genre_2', 'genre_3']})
+  else:
+    state['building_event_state'].update({"genre": state['building_event_state']['genre'][1:]})
+
+
+tools = {
+    "update_temp": update_temp,
+    "update_lights_lux": update_lights_lux,
+    "change_music_volume": change_music_volume,
+    "update_room_location": update_room_location,
+    "make_announcement": make_announcement,
+    "ff_genre": ff_genre
+}
+
 
 
 
@@ -152,6 +162,19 @@ class Node4OutputSchema(BaseModel):
     # 6. FINISH
 
 
+# 0.(NO-LLM) Initialize state values to be in the optimal ranges:
+def call_node_0(state):
+    # randomly choose a function from all_functions (a dictionary with the function name as a string as key, and the function itself as a value)
+    # that randomizes the value of a certain state variable update the state with that new value
+    all_functions = state["all_functions"]
+    random_function = random.choice(list(all_functions.values()))
+    state = random_function()
+
+    event_duration_iterator = state["event_duration_iterator"] # to simulate how long the event is
+    event_duration_iterator += 1
+
+    state.update({"event_duration_iterator": event_duration_iterator})
+    return state
 
 # 1.(NO-LLM) Changing Environment Simulation Node: 
 def call_node_1(state):

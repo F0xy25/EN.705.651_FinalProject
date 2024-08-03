@@ -9,11 +9,15 @@ class UserState(TypedDict):
     metadata: dict            #Any other information (Location, Entry Time, ,etc.)
 
 #State Schema to be used for any environmental state updates
-class EnvironmentState(TypedDict):
+class BuildingEventState(TypedDict):
     temperature: float        #Temperature in Farenheit (60-85)
     light_intensity: int      #Light intensity in lumens (0-1000)
     volume: int               #In Decibels (70-120)
     genre: list               #List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
+    location: str
+
+class State(TypedDict):
+  building_event_state: BuildingEventState
 
 #State Schema for Security Bot
 class SecurityBotState(TypedDict):
@@ -45,26 +49,16 @@ class LocationArea(Enum):
   WEST = 4
 
 # Helper methods
-def get_optimal_range(state: EnvironmentState, key, subkey=None):
+def get_optimal_range(state: State, key, subkey=None):
   if subkey is not None:
     return state['min_optimum'][key][subkey], state['max_optimum'][key][subkey]
   else:
     return state['min_optimum'][key], state['max_optimum'][key]
 
 
-def find_adaptation_from_optimal_range(state: EnvironmentState, optimal_min, optimal_max, current):
-  adaptation = state['prediction_detail']['adaptation']
-  if adaptation == Adaptation.UP:
-    return random.randrange(current, optimal_max + 1)
-  elif adaptation == Adaptation.DOWN:
-    return random.randrange(optimal_min, current)
-  return None
-
-
-def get_min_max_update(state: EnvironmentState, state_param, subkey=None):
+def get_random_val_within_range(state: State, state_param, subkey=None):
   predicted_min_optimum, predicted_max_optimum = get_optimal_range(state, state_param) if subkey is None else get_optimal_range(state, state_param, subkey)
-  current = state[state_param] if subkey is None else state[state_param][subkey]
-  return find_adaptation_from_optimal_range(state, predicted_min_optimum, predicted_max_optimum, current)
+  return random.randrange(predicted_min_optimum, predicted_max_optimum + 1)
 
 
 def switch_location_randomly(existing_location):
@@ -73,79 +67,50 @@ def switch_location_randomly(existing_location):
 
 
 # Utilities which can changed based on the model's prediction to update an environmental variable
-def update_temp(state: EnvironmentState):
+def update_temp(state: State, initialize=False):
   state_param = 'temperature'
-  state_update = get_min_max_update(state, state_param)
+  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
-    state[state_param] = state_update
+    state['building_event_state'].update({state_param: state_update})
 
 
-def update_lights_lux(state: EnvironmentState):
+def update_lights_lux(state: State, initialize=False):
   # Lights are associated with a location + in the range: 100 - 1000 lux
-  state_param = 'lights'
-  current_location = state['room_location']
-  state_update = get_min_max_update(state, state_param, current_location)
+  state_param = 'light_intensity'
+  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
-    state[state_param][current_location] = state_update
+    state['building_event_state'].update({state_param: state_update})
 
 
-def change_music_volume(state: EnvironmentState):
-  state_param = 'music_volume'
-  state_update = get_min_max_update(state, state_param)
+def change_music_volume(state: State, initialize=False):
+  state_param = 'volume'
+  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
-    state[state_param] = state_update
+    state['building_event_state'].update({state_param: state_update})
 
 
-def update_room_location(state: EnvironmentState):
-  state['room_location'] = switch_location_randomly(state['room_location'])
-  test = update_lights_lux(state)
-  # set a default for this
-  update_lights_lux(state)
-  # dim other room lights
-
-  other_locations = [location.name for location in EventLocation if location.name != state['room_location']]
-  for location in other_locations:
-    state['lights'][location] = 50
-
-
-def make_announcement(state: EnvironmentState):
-  state['announcement'] = state['prediction_detail']['language_update']
-
-
-def skip_song(state: EnvironmentState):
-  # assumed that this is a skip, but it could include more complex requests
-  state['music_playlist'] = state['music_playlist'][1:]
-
-
-def generate_report_from_undercover_security_bot(state: SecurityBotState):
-  # The bot cruises around and evaluates the level of chaos at the event location
-  # These updates are iterative not random for orchestrating escalation + de-escalation
-  current_area = state['bot']['area'].name
-  adaptation = state['prediction_detail']['adaptation']
-  if adaptation == Adaptation.UP:
-    state[current_area]['chaos'] = state[current_area]['chaos'] + 1
-  elif adaptation == Adaptation.DOWN:
-    state[current_area]['chaos'] = state[current_area]['chaos'] - 1
-
-  # The bot moves if the chaos is below the maximum threshold
-  if state[current_area]['chaos'] < state['max_optimum']['chaos']:
-    state['bot']['area'] = random.choice([area for area in LocationArea if area.name != current_area])
-
-
-
-# The bot goes to certain areas and delivers security messages in times of chaos
-def purpose_undercover_security_bot(state: SecurityBotState):
-  predicted_min_optimum = state['min_optimum']['chaos']
-  predicted_max_optimum = state['max_optimum']['chaos']
-  # Below the range of normal 'chaos' requires a security response as well.
-  prior_objective = state['bot']['objective']
-  if state['chaos'] > predicted_max_optimum or state['chaos'] < predicted_min_optimum:
-    state['bot']['objective'] = Purpose.SECURITY
-    state['bot']['decibal'] = state['music_volume'] + 50
-    state['music_volume'] = state['music_volume'] - 50
+def update_room_location(state: State, initialize=False):
+  if initialize:
+    state['building_event_state'].update({"location": EventLocation.RECEPTION.name})
   else:
-    state['bot']['objective'] = Purpose.SOCIAL
-    if prior_objective == Purpose.SECURITY:
-      state['music_volume'] = state['music_volume'] + 50
-      state['bot']['decibal'] = state['music_volume'] - 50
-  state['bot']['message'] = state['prediction_detail']['language_update']
+    state['building_event_state'].update({"location": switch_location_randomly(state['location'])})
+  # set a default for this
+  update_lights_lux(state, initialize=True)
+  # dim other room lights
+  other_locations = [location.name for location in EventLocation if location.name != state['building_event_state']['location']]
+  for _ in other_locations:
+    state['building_event_state'].update({'light_intensity': 50})
+
+
+def make_announcement(state: State, initialize=False):
+  announcement = "Welcome to the event!" if initialize else state["target_value"]
+  state['building_event_state']['building_event_state'].update({"announcement": announcement})
+
+
+def ff_genre(state: State, initialize=False):
+  if initialize or len(state['building_event_state']['genre']) == 1:
+    # set up playlist
+    state['building_event_state'].update({"genre": ['genre_1', 'genre_2', 'genre_3']})
+  else:
+    state['building_event_state'].update({"genre": state['building_event_state']['genre'][1:]})
+
