@@ -32,6 +32,22 @@ class BuildingEventState(TypedDict):
             current_sentiment=current_sentiment,
         )
 
+    @classmethod
+    def with_defaults_low_temp(cls, genres: list, temp: float = 30) -> "BuildingEventState":
+        return cls.with_defaults(genres=genres, temperature=temp)
+
+    @classmethod
+    def with_defaults_low_light(cls, genres: list, light: float = 10) -> "BuildingEventState":
+        return cls.with_defaults(genres=genres, light_intensity=light)
+
+    @classmethod
+    def with_defaults_low_volume(cls, genres: list, volume: float = 0) -> "BuildingEventState":
+        return cls.with_defaults(genres=genres, volume=volume)
+
+    @classmethod
+    def with_defaults_low_current_sentiment(cls, genres: list, sentiment: str = 'still sad.  this event is not cheering me up') -> "BuildingEventState":
+        return cls.with_defaults(genres=genres, current_sentiment=sentiment)
+
 
 class PredictionState(TypedDict):
     function_name: str  # Name of the function to be called
@@ -55,8 +71,21 @@ class GroupPreferences(TypedDict):
     current_sentiment: str
 
     @classmethod
-    def with_defaults(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
-                      volume: int = 5,  location = EventLocation.RECEPTION.name, current_sentiment = "happy") -> "GroupPreferences":
+    def with_defaults_low(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
+                      volume: int = 5,  location = EventLocation.RECEPTION.name, current_sentiment = "doing alright") -> "GroupPreferences":
+        return cls(
+            genres=genres,
+            temperature=temperature,
+            light_intensity=light_intensity,
+            volume=volume,
+            location=location,
+            current_sentiment=current_sentiment,
+        )
+
+    @classmethod
+    def with_defaults_high(cls, genres: list, temperature: float = 80.0, light_intensity: int = 60,
+                          volume: int = 10, location=EventLocation.DANCE_HALL.name,
+                          current_sentiment="over the moon") -> "GroupPreferences":
         return cls(
             genres=genres,
             temperature=temperature,
@@ -158,16 +187,14 @@ def ff_genre(state: State, initialize=False):
 
 def initialize_state(state: State):
     # tests:  set up so that initial event state should line up eventually to group preferences.
-    # default building state
-    state['building_event_state'] = BuildingEventState.with_defaults(genres=["soul", "funk"])
     # initial group preferences setting optimal ranges
     state['optimal_ranges'] = OptimalRanges()
-    state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "soul"])})
-    state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["hip-hop", "dance"])})
-    # print()
-    # for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
-    #     state['optimal_ranges']['min_optimum'].update({key: value})
-    #     state['optimal_ranges']['max_optimum'].update({key: value})
+    state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults_low(["jazz", "soul"])})
+    state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
+
+    # Default building state.  The building variables will move to the optimal ranges
+    state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+
     # agent workflow variables
     # llm agent-communication variables
     state['guests_happy'] = False
