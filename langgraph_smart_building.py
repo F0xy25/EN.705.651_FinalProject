@@ -4,6 +4,8 @@ from langgraph.graph import END, StateGraph, MessagesState
 from langchain.prompts.prompt import PromptTemplate
 from langchain.pydantic_v1 import BaseModel, conlist
 from input_schema_and_utility import get_random_val_within_range, switch_location_randomly, EventLocation
+from langchain.output_parsers import JsonOutputToolsParser, ResponseSchema
+from langchain.chains import LLMChain
 import random
 import os
 
@@ -21,21 +23,23 @@ class BuildingEventState(TypedDict):
 # This is currently a duplicate of Building Event States but eventually it will
 # become a signal source for default min + max optimal values for the BES.
 class GroupPreferences(TypedDict):
-    genre: str
     temperature: float
     light_intensity: int
     volume: int
-    genre: list
+    genres: list
     location: str
+    current_sentiment: str
 
     @classmethod
     def with_defaults(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
-                      volume: int = 5) -> "GroupPreferences":
+                      volume: int = 5,  location = EventLocation.RECEPTION.name, current_sentiment = "happy") -> "GroupPreferences":
         return cls(
-            genre=genres,
+            genres=genres,
             temperature=temperature,
             light_intensity=light_intensity,
             volume=volume,
+            location=location,
+            current_sentiment=current_sentiment,
         )
 
 
@@ -78,8 +82,10 @@ workflow = StateGraph(State)
 # Tools
 
 def update_temp(state: State, initialize=False):
+  print('state: ')
+  print(state)
   state_param = 'temperature'
-  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
+  state_update = state.get('target_value') if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
@@ -87,7 +93,7 @@ def update_temp(state: State, initialize=False):
 def update_lights_lux(state: State, initialize=False):
   # Lights are associated with a location + in the range: 100 - 1000 lux
   state_param = 'light_intensity'
-  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
+  state_update = state.get('target_value')  if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
@@ -152,7 +158,7 @@ class Node4OutputSchema(BaseModel):
    <target_value>The value to set the environmental factor to</target_value>
     """
     function_name: str
-    target_value: float
+    target_value: str
 
 
 
@@ -195,6 +201,9 @@ def call_node_1(state):
         state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
         state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
         state['event_duration_iterator'] = 0
+        state['guests_happy'] = False
+        state['current_sentiment'] = ''
+        state['function_name'] = ''
         state["messages"] = []
         for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
             state['optimal_ranges']['min_optimum'].update({key: value})
@@ -253,17 +262,27 @@ def call_node_2(state):
     - Unhappy: "I don't know, guys... I'm not really feeling this vibe."
     - Happy: "Best. Night. Ever! Everything's just perfect!"
 
-    Provide your response within <response> tags. Do not include any explanation or reasoning outside of these tags - your entire output should be the in-character response of the concert-goer.
-        """
+    Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
+    Output your result in the following format:
+   
+   {current_sentiment}
+   
+     """
     PROMPT = PromptTemplate(
-        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES"], 
+        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES"],
+        output_variables=["current_sentiment"],
         template=prompt_template
     )
 
     llm = ChatOpenAI(model="gpt-4o")
-    prompt = PROMPT.format(ENVIRONMENT_VALUES=state.get('building_event_state'), OPTIMAL_RANGES=state.get('optimal_ranges'))
-
-    return prompt | llm.with_structured_output(Node2OutputSchema)
+    llm.with_structured_output(Node2OutputSchema)
+    prompt = PROMPT.format(
+        ENVIRONMENT_VALUES=state.get('building_event_state'),
+        OPTIMAL_RANGES=state.get('optimal_ranges'), current_sentiment=state.get('current_sentiment')
+    )
+    msg = llm.invoke(prompt).content
+    state.update({"current_sentiment": msg})
+    return state
 
 
 # 3.(LLM)    Sentiment Analysis Node: 
@@ -285,11 +304,7 @@ def call_node_3(state):
     Based on your analysis, you will determine if the guest is happy or not. If the sentiment analysis indicates that the guest/concert-goer is happy, you will set the 'guests_happy' value to true. If the sentiment analysis indicates that the guest/concert-goer is sad or at least not happy, you will set the 'guests_happy' value to false.
 
     Output your result in the following format:
-    <result>
-    {
-    "guests_happy": boolean_value
-    }
-    </result>
+    {guests_happy}
 
     Where boolean_value is either true or false.
 
@@ -302,14 +317,18 @@ def call_node_3(state):
     Provide your analysis and reasoning before giving the final result."""
     
     PROMPT = PromptTemplate(
-        input_variables=["current_sentiment"], 
+        input_variables=["current_sentiment"],
+        output_variables=["guests_happy"],
         template=prompt_template
     )
 
     llm = ChatOpenAI(model="gpt-4o")
-    prompt = PROMPT.format(current_sentiment=state["current_sentiment"])
+    llm.with_structured_output(Node3OutputSchema)
+    prompt = PROMPT.format(current_sentiment=state["current_sentiment"], guests_happy=state["guests_happy"])
 
-    return prompt | llm.with_structured_output(Node3OutputSchema)
+    msg = llm.invoke(prompt).content
+    state.update({"guests_happy": msg})
+    return state
 
 
 # 4.(LLM)    Environment Updater Node:
@@ -355,41 +374,60 @@ def call_node_4(state):
     c. Select the appropriate tool from TOOLS to address this factor.
     d. Decide on the optimal value within the factor's ideal range to set it to.
 
-    6. Output your decision in the following format:
-    <decision>
-    <function_name>Name of the selected tool</function_name>
-    <target_value>The value to set the environmental factor to</target_value>
-    </decision>
-
-    7. If the sentiment is positive or neutral, or if no environmental factors are outside their optimal ranges, output:
-    <decision>No action needed</decision>
-
-    Here's an example of how your output might look:
-
-    <decision>
-    <function_name>adjust_temperature</function_name>
-    <target_value>72</target_value>
-    </decision>
-
-    Remember, your goal is to improve the event experience by making data-driven decisions based on the provided information."""
+    6. If the sentiment is positive or neutral, or if no environmental factors are outside their optimal ranges, output:
+    Respond with a JSON object containing:
+    - "function_name": The name of the previous function that was executed.
+    - "target_value": The previous target value.
     
+    Previous Function Name:
+    {function_name}
+    
+    Previous Target Value:
+    {target_value}
+    
+    Respond with a JSON object containing:
+    - "function_name": The name of the function to execute.
+    - "target_value": The target value for the function.
+    
+    Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
+    Remember, your goal is to improve the event experience by making data-driven decisions based on the provided information."""
 
+    response_schemas = [
+        ResponseSchema(name="function_name", description="The name of the function to execute"),
+        ResponseSchema(name="target_value", description="The target value for the function")
+    ]
+    parser = JsonOutputToolsParser(response_schemas=response_schemas)
     PROMPT = PromptTemplate(
-        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS"], 
+        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS"],
+        partial_variables={
+            "function_name": lambda: state.get('function_name', ""),
+            "target_value": lambda: state.get('target_value', ""),
+        },
         template=prompt_template
     )
 
-    prompt = PROMPT.format(ENVIRONMENT_VALUES=state.get('building_event_state'), OPTIMAL_RANGES=state.get('optimal_ranges'), CURRENT_SENTIMENT=state['guests_happy'], TOOLS=tools)
-
     llm = ChatOpenAI(model="gpt-4o")
-    
-    return prompt | llm.with_structured_output(Node4OutputSchema)
+
+    prompt = PROMPT.format(
+        ENVIRONMENT_VALUES=state.get('building_event_state'),
+        OPTIMAL_RANGES=state.get('optimal_ranges'),
+        CURRENT_SENTIMENT=state['guests_happy'],
+        TOOLS=tools,
+    )
+    msg = llm.invoke(prompt).content
+    parsed_output = parser.parse(msg)
+    state.update({"function_name": parsed_output.function_name})
+    state.update({"target_value": int(parsed_output.target_value)})
+    return state
 
 
 # 5.(TOOL)  Tool Node:
 def call_node_5(state):
-    chosen_function = state["all_functions"][state["function_name"]]
-    state = chosen_function(state["target_value"])
+    function_name = state["function_name"]
+    all_functions = state["all_functions"]
+    if function_name in all_functions:
+        chosen_function = state["all_functions"][state["function_name"]]
+        state = chosen_function(state)
     return state
    
 
