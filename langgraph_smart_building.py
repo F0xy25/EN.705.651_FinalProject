@@ -395,33 +395,37 @@ def call_node_4(state):
 
     4. Assess the CURRENT_SENTIMENT to determine if event-goers are unhappy.
 
-    5. If the sentiment is negative, follow these steps:
-    a. Identify which environmental factor(s) are most likely causing the dissatisfaction.
+    5. If the sentiment is negative, you will make a function and value selection
+    and to make sure it does not duplicate the prior prediction function and value included in PRIOR_PREDICTION.
+    Her are the steps to follow for this:
+    a. Identify which environmental factor(s) are most likely causing the dissatisfaction 
     b. Determine which factor, if adjusted, would have the most significant positive impact.
+    c. If none seem right just select a factor at random
     c. Select the appropriate tool from TOOLS to address this factor.
-    d. Decide on the optimal value within the factor's ideal range to set it to.
+    d. Decide on the optimal value within the factor's ideal range to set it to.  If it is already within a range, 
+    add some adaptation to fluxuate it a bit.
 
     6. If the sentiment is positive or neutral, or if no environmental factors are outside their optimal ranges, output:
     Respond with a JSON object containing:
     - "function_name": The name of the previous function that was executed.
     - "target_value": The previous target value.
     
-    Previous Function Name:
+    Function Name:
     {function_name}
     
-    Previous Target Value:
+    Target Value:
     {target_value}
     
     Respond with a JSON object containing:
-    - "function_name": The name of the function to execute.
-    - "target_value": The target value for the function.
+    - "function_name": The name of the function to newly execute.
+    - "target_value": The new target value for the function.
     
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
     Remember, your goal is to improve the event experience by making data-driven decisions based on the provided information."""
 
     parser = PydanticOutputParser(pydantic_object=Node4OutputSchema)
     PROMPT = PromptTemplate(
-        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS"],
+        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS", "PRIOR_PREDICTION"],
         partial_variables={
             "function_name": lambda: state.get('function_name', ""),
             "target_value": lambda: state.get('target_value', ""),
@@ -431,11 +435,21 @@ def call_node_4(state):
 
     llm = ChatOpenAI(model="gpt-4o")
 
+    filtered_tools = {}
+
+    for key, value in tools.items():
+        if key != state['predictions']['function_name']:
+            filtered_tools[key] = value
+
+    print('filtered tools')
+    print(filtered_tools)
+
     prompt = PROMPT.format(
         ENVIRONMENT_VALUES=state.get('building_event_state'),
         OPTIMAL_RANGES=state.get('optimal_ranges'),
         CURRENT_SENTIMENT=state['guests_happy'],
-        TOOLS=tools,
+        PRIOR_PREDICTION=state['predictions'],
+        TOOLS=filtered_tools,
     )
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
@@ -447,7 +461,7 @@ def call_node_4(state):
     if parsed_output.function_name == 'make_announcement' or parsed_output.function_name == 'ff_genre':
         target_val = parsed_output.target_value
     else:
-        target_val = int(parsed_output.target_value)
+        target_val = int(float(parsed_output.target_value))
 
     state['predictions'].update({"target_value": target_val})
     return state
