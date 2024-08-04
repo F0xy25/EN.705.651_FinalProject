@@ -157,16 +157,17 @@ def ff_genre(state: State, initialize=False):
     state['building_event_state'].update({"genres": current_genre[1:]})
 
 def initialize_state(state: State):
-    # test 1: temp update needed.
+    # tests:  set up so that initial event state should line up eventually to group preferences.
     # default building state
     state['building_event_state'] = BuildingEventState.with_defaults(genres=["soul", "funk"])
     # initial group preferences setting optimal ranges
     state['optimal_ranges'] = OptimalRanges()
     state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "soul"])})
     state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["hip-hop", "dance"])})
-    for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
-        state['optimal_ranges']['min_optimum'].update({key: value})
-        state['optimal_ranges']['max_optimum'].update({key: value})
+    # print()
+    # for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
+    #     state['optimal_ranges']['min_optimum'].update({key: value})
+    #     state['optimal_ranges']['max_optimum'].update({key: value})
     # agent workflow variables
     # llm agent-communication variables
     state['guests_happy'] = False
@@ -202,7 +203,7 @@ class Node2OutputSchema(BaseModel):
 
 class Node3OutputSchema(BaseModel):
     """Your determination as a boolean, whether or not the sentiment presented to you is postive or negative"""
-    guests_happy: bool 
+    guests_happy: str
 
 class Node4OutputSchema(BaseModel):
     """
@@ -342,12 +343,10 @@ def call_node_3(state):
     Based on your analysis, you will determine if the guest is happy or not. If the sentiment analysis indicates that the guest/concert-goer is happy, you will set the 'guests_happy' value to true. If the sentiment analysis indicates that the guest/concert-goer is sad or at least not happy, you will set the 'guests_happy' value to false.
 
     g. Respond with a JSON object containing:
-    - "guests_happy": The state of the guests happiness.  This should be a string which is either true or false.
+    - "guests_happy": The state of the guests happiness.  This should be a string which is either 'true' or 'false'.  If it is unknown, use 'false'.
      
     Guests Happy:
     {guests_happy}
-
-    Where boolean_value is either true or false.
 
     Examples of positive sentiments might include phrases like "had a great time," "loved the event," "amazing experience," or "can't wait for the next one."
 
