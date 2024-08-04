@@ -185,24 +185,30 @@ def ff_genre(state: State, initialize=False):
   else:
     state['building_event_state'].update({"genres": current_genre[1:]})
 
-def initialize_state(state: State):
+
+def initialize_guest_event_synergy_state(state: State):
     # tests:  set up so that initial event state should line up eventually to group preferences.
     # initial group preferences setting optimal ranges
     state['optimal_ranges'] = OptimalRanges()
-    state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults_low(["jazz", "soul"])})
-    state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
+    state['optimal_ranges'].update(
+        {'min_optimum': GroupPreferences.with_defaults_low(["jazz", "soul"])})
+    state['optimal_ranges'].update(
+        {'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
 
     # Default building state.  The building variables will move to the optimal ranges
     state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+    return state
 
-    # agent workflow variables
+
+def initialize_system_state(state: State):
+    # Agent workflow variables
     # llm agent-communication variables
     state['guests_happy'] = False
     state['current_sentiment'] = ''
-    # prediction defaults
+    # Prediction defaults
     state["prior_predictions"] = []
     state['predictions'] = PredictionState.with_defaults()
-    # system variables
+    # System variables
     state['event_duration_iterator'] = 0
     state["messages"] = []
     # Initialize building into the required ranges
@@ -276,9 +282,9 @@ def call_node_1(state):
     # initialize everything if the state is not been set.
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
-        state = initialize_state(state)
+        state = initialize_guest_event_synergy_state(state)
+        state = initialize_system_state(state)
     state.update({"initialized": True})
-
 
     # randomly choose a function from all_functions (a dictionary with the function name as a string as key, and the function itself as a value)
     # that randomizes the value of a certain state variable update the state with that new value
@@ -313,7 +319,13 @@ def call_node_2(state):
     </optimal_ranges>
 
     Compare the current environment values with your optimal ranges. If even a single value falls outside its optimal range, you must express unhappiness. If all values are within their optimal ranges, express happiness and enjoyment of the event.
-
+    
+    3. Respond with a JSON object containing:
+    - "current_sentiment": Text about how you feel about the event.  This should be a string.
+     
+    Current Sentiment:
+    {current_sentiment}
+    
     When responding, use an informal, colloquial tone typical of a concert-goer talking to friends. Your language should be casual, potentially including slang or mild exclamations.
 
     If unhappy, you may either:
@@ -323,16 +335,11 @@ def call_node_2(state):
     If happy, express your enjoyment of the event enthusiastically (e.g., "This is amazing! I'm having the time of my life!")
 
     Examples of possible responses:
-    - Unhappy: "Bro, I can barely hear myself think! The music's way too loud!"
+    - Unhappy: "Dude, I can barely hear myself think! The music's way too loud!"
     - Unhappy: "I don't know, guys... I'm not really feeling this vibe."
     - Happy: "Best. Night. Ever! Everything's just perfect!"
 
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
-    Respond with a JSON object containing:
-    - "current_sentiment": Text about how you feel about the event.  This should be a string.
-     
-    Current Sentiment:
-    {current_sentiment}
    
      """
     parser = PydanticOutputParser(pydantic_object=Node2OutputSchema)
@@ -375,8 +382,8 @@ def call_node_3(state):
 
     Based on your analysis, you will determine if the guest is happy or not. If the sentiment analysis indicates that the guest/concert-goer is happy, you will set the 'guests_happy' value to true. If the sentiment analysis indicates that the guest/concert-goer is sad or at least not happy, you will set the 'guests_happy' value to false.
 
-    g. Respond with a JSON object containing:
-    - "guests_happy": The state of the guests happiness.  This should be a string which is either 'true' or 'false'.  If it is unknown, use 'false'.
+    5. Respond with a JSON object containing:
+    - "guests_happy": The state of the guests happiness which can be true or false.  This should be a string.
      
     Guests Happy:
     {guests_happy}
@@ -412,6 +419,8 @@ def call_node_3(state):
 
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
+    print("TEST parsed_output: ")
+    print(parsed_output)
     state.update({"guests_happy": parsed_output.guests_happy})
     return state
 
