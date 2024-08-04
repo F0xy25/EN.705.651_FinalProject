@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, List, Tuple
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph, MessagesState
 from langchain.prompts.prompt import PromptTemplate
@@ -91,6 +91,7 @@ class State(TypedDict):
     guests_happy: bool             # Sentiment Analysis output by Node 3 Sentiment Analysis Node to route the output to either Node 1 or 4. True is Happy, False is Sad.
     all_functions: dict            # All the functions that can be used
     predictions: PredictionState
+    prior_predictions: Tuple[List[PredictionState], BuildingEventState]
     optimal_ranges: OptimalRanges
     initialized: bool
 
@@ -105,8 +106,6 @@ workflow = StateGraph(State)
 # Tools
 
 def update_temp(state: State, initialize=False):
-  print('state: ')
-  print(state)
   state_param = 'temperature'
   state_update = state['predictions'].get('target_value') if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
@@ -157,6 +156,32 @@ def ff_genre(state: State, initialize=False):
   else:
     state['building_event_state'].update({"genres": current_genre[1:]})
 
+def initialize_state(state: State):
+    # test 1: temp update needed.
+    # default building state
+    state['building_event_state'] = BuildingEventState.with_defaults(genres=["soul", "funk"])
+    # initial group preferences setting optimal ranges
+    state['optimal_ranges'] = OptimalRanges()
+    state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "soul"])})
+    state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["hip-hop", "dance"])})
+    for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
+        state['optimal_ranges']['min_optimum'].update({key: value})
+        state['optimal_ranges']['max_optimum'].update({key: value})
+    # agent workflow variables
+    # llm agent-communication variables
+    state['guests_happy'] = False
+    state['current_sentiment'] = ''
+    # prediction defaults
+    state["prior_predictions"] = []
+    state['predictions'] = PredictionState.with_defaults()
+    # system variables
+    state['event_duration_iterator'] = 0
+    state["messages"] = []
+    # Initialize building into the required ranges
+    for function in state["all_functions"].values():
+        function(state, initialize=True)
+    return state
+
 
 tools = {
     "update_temp": update_temp,
@@ -166,6 +191,7 @@ tools = {
     "make_announcement": make_announcement,
     "ff_genre": ff_genre
 }
+
 
 # ========================================================================
 # Pydantic Output Schemas
@@ -222,23 +248,7 @@ def call_node_1(state):
     # initialize everything if the state is not been set.
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
-        all_functions = state["all_functions"]
-        state['building_event_state'] = BuildingEventState.with_defaults(genres=["soul", "funk"])
-        state['optimal_ranges'] = OptimalRanges()
-        state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "soul"])})
-        state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["hip-hop", "dance"])})
-        state['event_duration_iterator'] = 0
-        state['guests_happy'] = False
-        state['current_sentiment'] = 'Sad because they are overheating'
-        state['predictions'] = PredictionState.with_defaults()
-        state["messages"] = []
-        for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
-            state['optimal_ranges']['min_optimum'].update({key: value})
-            state['optimal_ranges']['max_optimum'].update({key: value})
-
-        # Set all building event variables from the optimal ranges
-        for function in all_functions.values():
-            function(state, initialize=True)
+        state = initialize_state(state)
     state.update({"initialized": True})
 
 
@@ -308,6 +318,7 @@ def call_node_2(state):
         OPTIMAL_RANGES=state.get('optimal_ranges'), current_sentiment=state.get('current_sentiment')
     )
     msg = llm.invoke(prompt).content
+    print('CURRENT SENTIMENT prediction: ' + msg)
     state.update({"current_sentiment": msg})
     return state
 
@@ -330,7 +341,10 @@ def call_node_3(state):
 
     Based on your analysis, you will determine if the guest is happy or not. If the sentiment analysis indicates that the guest/concert-goer is happy, you will set the 'guests_happy' value to true. If the sentiment analysis indicates that the guest/concert-goer is sad or at least not happy, you will set the 'guests_happy' value to false.
 
-    Output your result in the following format:
+    g. Respond with a JSON object containing:
+    - "guests_happy": The state of the guests happiness.  This should be a string which is either true or false.
+     
+    Guests Happy:
     {guests_happy}
 
     Where boolean_value is either true or false.
@@ -342,19 +356,32 @@ def call_node_3(state):
     Remember to focus solely on determining whether the sentiment indicates happiness or sadness. Do not consider other emotions or nuances beyond this binary classification.
 
     Provide your analysis and reasoning before giving the final result."""
-    
+
+    parser = PydanticOutputParser(pydantic_object=Node3OutputSchema)
     PROMPT = PromptTemplate(
         input_variables=["current_sentiment"],
         output_variables=["guests_happy"],
+        partial_variables={
+            "guests_happy": lambda: state.get('guests_happy', ""),
+        },
         template=prompt_template
     )
 
     llm = ChatOpenAI(model="gpt-4o")
-    llm.with_structured_output(Node3OutputSchema)
-    prompt = PROMPT.format(current_sentiment=state["current_sentiment"], guests_happy=state["guests_happy"])
+
+    filtered_tools = {}
+
+    for key, value in tools.items():
+        if key != state['predictions']['function_name']:
+            filtered_tools[key] = value
+
+    prompt = PROMPT.format(
+        current_sentiment=state["current_sentiment"])
 
     msg = llm.invoke(prompt).content
-    state.update({"guests_happy": msg})
+    parsed_output = parser.parse(msg)
+    print('GUESTS HAPPY prediction: ' + str(parsed_output.guests_happy))
+    state.update({"guests_happy": parsed_output.guests_happy})
     return state
 
 
@@ -391,41 +418,43 @@ def call_node_4(state):
 
     2. Analyze the current environment by examining the ENVIRONMENT_VALUES.
 
-    3. Compare each value in ENVIRONMENT_VALUES to its corresponding range in OPTIMAL_RANGES. Identify any factors that are outside their optimal ranges.
+    3. Compare each value in ENVIRONMENT_VALUES to its corresponding range in OPTIMAL_RANGES. 
+    Identify any factors that are outside their optimal ranges.
 
     4. Assess the CURRENT_SENTIMENT to determine if event-goers are unhappy.
-
-    5. If the sentiment is negative, you will make a function and value selection
-    and to make sure it does not duplicate the prior prediction function and value included in PRIOR_PREDICTION.
-    Her are the steps to follow for this:
-    a. Identify which environmental factor(s) are most likely causing the dissatisfaction 
-    b. Determine which factor, if adjusted, would have the most significant positive impact.
-    c. If none seem right just select a factor at random
-    c. Select the appropriate tool from TOOLS to address this factor.
-    d. Decide on the optimal value within the factor's ideal range to set it to.  If it is already within a range, 
-    add some adaptation to fluxuate it a bit.
-
-    6. If the sentiment is positive or neutral, or if no environmental factors are outside their optimal ranges, output:
-    Respond with a JSON object containing:
-    - "function_name": The name of the previous function that was executed.
-    - "target_value": The previous target value.
-    
+ 
+    5. If the current sentiment is negative, follow these steps:
+    a. Evaluate PRIOR_PREDICTIONS which has a list of tools and values used by them which have been used to try to make 
+    them happy, paired with a state. Understand that a tool should not be immediately reused if the environment values 
+    haven't changed.
+    b. Identify which environmental factor(s) are most likely causing the dissatisfaction 
+    c. Determine which factor, if adjusted, would have the most significant positive impact that hasn't been tried, 
+    already.
+    d. If none seem right just select a factor at random - and hope for the best.
+    e. Select the appropriate tool from TOOLS to address this factor.
+    f. Decide on the optimal value within the factor's ideal range to set it to.
+    g. Respond with a JSON object containing:
+    - "function_name": The name of the function to newly execute.  This should be a string.
+    - "target_value": The new target value for the function.  This should be a string.
+     
     Function Name:
     {function_name}
-    
+
     Target Value:
     {target_value}
     
+
+    6. If the sentiment is positive or neutral, or if no environmental factors are outside their optimal ranges, output:
     Respond with a JSON object containing:
-    - "function_name": The name of the function to newly execute.
-    - "target_value": The new target value for the function.
+    - "function_name": pause
+    - "target_value": 
     
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
     Remember, your goal is to improve the event experience by making data-driven decisions based on the provided information."""
 
     parser = PydanticOutputParser(pydantic_object=Node4OutputSchema)
     PROMPT = PromptTemplate(
-        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS", "PRIOR_PREDICTION"],
+        input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS", "PRIOR_PREDICTIONS"],
         partial_variables={
             "function_name": lambda: state.get('function_name', ""),
             "target_value": lambda: state.get('target_value', ""),
@@ -441,38 +470,38 @@ def call_node_4(state):
         if key != state['predictions']['function_name']:
             filtered_tools[key] = value
 
-    print('filtered tools')
-    print(filtered_tools)
-
     prompt = PROMPT.format(
         ENVIRONMENT_VALUES=state.get('building_event_state'),
         OPTIMAL_RANGES=state.get('optimal_ranges'),
         CURRENT_SENTIMENT=state['guests_happy'],
-        PRIOR_PREDICTION=state['predictions'],
+        PRIOR_PREDICTIONS=state['prior_predictions'],
         TOOLS=filtered_tools,
     )
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
     print("PARSED OuTPUT!")
-    print(parsed_output)
+    print(parsed_output.function_name)
+    print(parsed_output.target_value)
     if parsed_output.function_name in ['', 'None'] or parsed_output.target_value in ['', 'None']:
         return state
-    state['predictions'].update({"function_name": parsed_output.function_name})
+
     if parsed_output.function_name == 'make_announcement' or parsed_output.function_name == 'ff_genre':
         target_val = parsed_output.target_value
     else:
         target_val = int(float(parsed_output.target_value))
 
     state['predictions'].update({"target_value": target_val})
+    state['predictions'].update({"function_name": parsed_output.function_name})
     return state
 
 
 # 5.(TOOL)  Tool Node:
 def call_node_5(state):
     function_name = state["predictions"]["function_name"]
-    all_functions =  state["all_functions"]
+    all_functions = state["all_functions"]
     if function_name in all_functions:
         chosen_function = all_functions[function_name]
+        state['prior_predictions'] += (state["predictions"], state['building_event_state'])
         state = chosen_function(state)
     return state
    
