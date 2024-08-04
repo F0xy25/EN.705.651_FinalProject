@@ -5,7 +5,7 @@ from langchain.prompts.prompt import PromptTemplate
 from langchain.pydantic_v1 import BaseModel, conlist
 from input_schema_and_utility import get_random_val_within_range, switch_location_randomly, EventLocation
 from langchain.output_parsers import JsonOutputToolsParser, ResponseSchema
-from langchain.chains import LLMChain
+from langchain_core.output_parsers import PydanticOutputParser
 import random
 import os
 
@@ -16,8 +16,21 @@ class BuildingEventState(TypedDict):
     temperature: float  # Temperature in Farenheit (60-85)
     light_intensity: int  # Light intensity in lumens (0-1000)
     volume: int  # In Decibels (70-120)
-    genre: list  # List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
+    genres: list  # List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
     location: str # Location of the event in the building
+
+    @classmethod
+    def with_defaults(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
+                      volume: int = 5, location=EventLocation.RECEPTION.name,
+                      current_sentiment="happy") -> "BuildingEventState":
+        return cls(
+            genres=genres,
+            temperature=temperature,
+            light_intensity=light_intensity,
+            volume=volume,
+            location=location,
+            current_sentiment=current_sentiment,
+        )
 
 
 # This is currently a duplicate of Building Event States but eventually it will
@@ -124,11 +137,15 @@ def make_announcement(state: State, initialize=False):
 
 
 def ff_genre(state: State, initialize=False):
-  if initialize or len(state['building_event_state']['genre']) == 1:
+  current_genre = state['building_event_state']['genres']
+  target_value = state['target_value']
+  if initialize or len(state['building_event_state']['genres']) == 1:
     # set up playlist
-    state['building_event_state'].update({"genre": ['genre_1', 'genre_2', 'genre_3']})
+    state['building_event_state'].update({"genres": ['genre_1', 'genre_2', 'genre_3']})
+  elif state['target_value']:
+    state['building_event_state'].update({"genres": target_value})
   else:
-    state['building_event_state'].update({"genre": state['building_event_state']['genre'][1:]})
+    state['building_event_state'].update({"genres": current_genre[1:]})
 
 
 tools = {
@@ -196,7 +213,7 @@ def call_node_1(state):
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
         all_functions = state["all_functions"]
-        state['building_event_state'] = BuildingEventState()
+        state['building_event_state'] = BuildingEventState.with_defaults(genres=["soul", "funk"])
         state['optimal_ranges'] = OptimalRanges()
         state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
         state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
@@ -392,11 +409,7 @@ def call_node_4(state):
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
     Remember, your goal is to improve the event experience by making data-driven decisions based on the provided information."""
 
-    response_schemas = [
-        ResponseSchema(name="function_name", description="The name of the function to execute"),
-        ResponseSchema(name="target_value", description="The target value for the function")
-    ]
-    parser = JsonOutputToolsParser(response_schemas=response_schemas)
+    parser = PydanticOutputParser(pydantic_object=Node4OutputSchema)
     PROMPT = PromptTemplate(
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS"],
         partial_variables={
@@ -416,8 +429,15 @@ def call_node_4(state):
     )
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
+    if parsed_output.function_name in ['', 'None'] or parsed_output.target_value in ['', 'None']:
+        return state
     state.update({"function_name": parsed_output.function_name})
-    state.update({"target_value": int(parsed_output.target_value)})
+    if parsed_output.function_name == 'make_announcement' or parsed_output.function_name == 'ff_genre':
+        target_val = parsed_output.target_value
+    else:
+        target_val = int(parsed_output.target_value)
+
+    state.update({"target_value": target_val})
     return state
 
 
