@@ -21,15 +21,13 @@ class BuildingEventState(TypedDict):
 
     @classmethod
     def with_defaults(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
-                      volume: int = 5, location=EventLocation.RECEPTION.name,
-                      current_sentiment="happy") -> "BuildingEventState":
+                      volume: int = 5, location=EventLocation.RECEPTION.name) -> "BuildingEventState":
         return cls(
             genres=genres,
             temperature=temperature,
             light_intensity=light_intensity,
             volume=volume,
             location=location,
-            current_sentiment=current_sentiment,
         )
 
     @classmethod
@@ -43,10 +41,6 @@ class BuildingEventState(TypedDict):
     @classmethod
     def with_defaults_low_volume(cls, genres: list, volume: float = 0) -> "BuildingEventState":
         return cls.with_defaults(genres=genres, volume=volume)
-
-    @classmethod
-    def with_defaults_low_current_sentiment(cls, genres: list, sentiment: str = 'still sad.  this event is not cheering me up') -> "BuildingEventState":
-        return cls.with_defaults(genres=genres, current_sentiment=sentiment)
 
 
 class PredictionState(TypedDict):
@@ -85,7 +79,7 @@ class GroupPreferences(TypedDict):
     @classmethod
     def with_defaults_high(cls, genres: list, temperature: float = 80.0, light_intensity: int = 60,
                           volume: int = 10, location=EventLocation.DANCE_HALL.name,
-                          current_sentiment="over the moon") -> "GroupPreferences":
+                          current_sentiment="Bro this is the best event. I'm obsessed.") -> "GroupPreferences":
         return cls(
             genres=genres,
             temperature=temperature,
@@ -318,7 +312,18 @@ def call_node_2(state):
     {OPTIMAL_RANGES}
     </optimal_ranges>
 
-    Compare the current environment values with your optimal ranges. If even a single value falls outside its optimal range, you must express unhappiness. If all values are within their optimal ranges, express happiness and enjoyment of the event.
+    Compare the current environment values with your optimal ranges. 
+    If even a single value falls outside its optimal range, you must express unhappiness. 
+    If all values are within their optimal ranges, express happiness and enjoyment of the event.
+    
+    The key environment variables which are readily evaluated numerically are:
+    temperature
+    light intensity
+    volume
+    
+    The environment variables which need some correlation association are:
+    genres (music genres) - is the value within the mood set by the range within preferred genres?
+    location - Is the location one of the preferred locations in the min and max optimums
     
     3. Respond with a JSON object containing:
     - "current_sentiment": Text about how you feel about the event.  This should be a string.
@@ -346,7 +351,7 @@ def call_node_2(state):
     PROMPT = PromptTemplate(
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES"],
         partial_variables={
-            "current_sentiment": lambda: state['building_event_state'].get('current_sentiment', ""),
+            "current_sentiment": lambda: state.get('current_sentiment', ""),
         },
         template=prompt_template
     )
@@ -513,7 +518,7 @@ def call_node_4(state):
     prompt = PROMPT.format(
         ENVIRONMENT_VALUES=state.get('building_event_state'),
         OPTIMAL_RANGES=state.get('optimal_ranges'),
-        CURRENT_SENTIMENT=state['guests_happy'],
+        CURRENT_SENTIMENT=state['current_sentiment'],
         PRIOR_PREDICTIONS=state['prior_predictions'],
         TOOLS=filtered_tools,
     )
