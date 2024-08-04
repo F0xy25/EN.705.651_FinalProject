@@ -67,6 +67,9 @@ class State(TypedDict):
     optimal_ranges: OptimalRanges
     initialized: bool
 
+    # Output details
+    messages: str
+
 os.environ['OPENAI_API_KEY'] = ""
 workflow = StateGraph(State)
 
@@ -192,6 +195,7 @@ def call_node_1(state):
         state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
         state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
         state['event_duration_iterator'] = 0
+        state["messages"] = []
         for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
             state['optimal_ranges']['min_optimum'].update({key: value})
             state['optimal_ranges']['max_optimum'].update({key: value})
@@ -255,7 +259,6 @@ def call_node_2(state):
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES"], 
         template=prompt_template
     )
-    
 
     llm = ChatOpenAI(model="gpt-4o")
     prompt = PROMPT.format(ENVIRONMENT_VALUES=state.get('building_event_state'), OPTIMAL_RANGES=state.get('optimal_ranges'))
