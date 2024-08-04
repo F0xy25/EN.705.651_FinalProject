@@ -323,31 +323,37 @@ def call_node_2(state):
     If happy, express your enjoyment of the event enthusiastically (e.g., "This is amazing! I'm having the time of my life!")
 
     Examples of possible responses:
-    - Unhappy: "Dude, I can barely hear myself think! The music's way too loud!"
+    - Unhappy: "Bro, I can barely hear myself think! The music's way too loud!"
     - Unhappy: "I don't know, guys... I'm not really feeling this vibe."
     - Happy: "Best. Night. Ever! Everything's just perfect!"
 
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
-    Output your result in the following format:
-   
-   {current_sentiment}
+    Respond with a JSON object containing:
+    - "current_sentiment": Text about how you feel about the event.  This should be a string.
+     
+    Current Sentiment:
+    {current_sentiment}
    
      """
+    parser = PydanticOutputParser(pydantic_object=Node2OutputSchema)
     PROMPT = PromptTemplate(
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES"],
-        output_variables=["current_sentiment"],
+        partial_variables={
+            "current_sentiment": lambda: state['building_event_state'].get('current_sentiment', ""),
+        },
         template=prompt_template
     )
 
     llm = ChatOpenAI(model="gpt-4o")
-    llm.with_structured_output(Node2OutputSchema)
     prompt = PROMPT.format(
         ENVIRONMENT_VALUES=state.get('building_event_state'),
-        OPTIMAL_RANGES=state.get('optimal_ranges'), current_sentiment=state.get('current_sentiment')
+        OPTIMAL_RANGES=state.get('optimal_ranges')
     )
+
     msg = llm.invoke(prompt).content
-    print('CURRENT SENTIMENT prediction: ' + msg)
-    state.update({"current_sentiment": msg})
+    parsed_output = parser.parse(msg)
+    print('CURRENT SENTIMENT prediction: ' + parsed_output.current_sentiment)
+    state.update({"current_sentiment": parsed_output.current_sentiment})
     return state
 
 
@@ -388,7 +394,7 @@ def call_node_3(state):
         input_variables=["current_sentiment"],
         output_variables=["guests_happy"],
         partial_variables={
-            "guests_happy": lambda: state.get('guests_happy', ""),
+            "guests_happy": lambda: state['building_event_state'].get('guests_happy', ""),
         },
         template=prompt_template
     )
@@ -406,7 +412,6 @@ def call_node_3(state):
 
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
-    print('GUESTS HAPPY prediction: ' + str(parsed_output.guests_happy))
     state.update({"guests_happy": parsed_output.guests_happy})
     return state
 
@@ -482,8 +487,8 @@ def call_node_4(state):
     PROMPT = PromptTemplate(
         input_variables=["ENVIRONMENT_VALUES", "OPTIMAL_RANGES", "CURRENT_SENTIMENT", "TOOLS", "PRIOR_PREDICTIONS"],
         partial_variables={
-            "function_name": lambda: state.get('function_name', ""),
-            "target_value": lambda: state.get('target_value', ""),
+            "function_name": lambda: state['building_event_state'].get('function_name', ""),
+            "target_value": lambda: state['building_event_state'].get('target_value', ""),
         },
         template=prompt_template
     )
