@@ -33,6 +33,17 @@ class BuildingEventState(TypedDict):
         )
 
 
+class PredictionState(TypedDict):
+    function_name: str  # Name of the function to be called
+    target_value: float  # The value to call the chosen function with
+    @classmethod
+    def with_defaults(cls, function_name: str = '', target_val: str = '') -> "PredictionState":
+        return cls(
+            function_name=function_name,
+            target_value=target_val,
+        )
+
+
 # This is currently a duplicate of Building Event States but eventually it will
 # become a signal source for default min + max optimal values for the BES.
 class GroupPreferences(TypedDict):
@@ -79,8 +90,7 @@ class State(TypedDict):
     current_sentiment: str         # Output by Node 2 User Sentiment Simulation Node
     guests_happy: bool             # Sentiment Analysis output by Node 3 Sentiment Analysis Node to route the output to either Node 1 or 4. True is Happy, False is Sad.
     all_functions: dict            # All the functions that can be used
-    function_name: str             # Name of the function to be called
-    target_value: float            # The value to call the chosen function with
+    predictions: PredictionState
     optimal_ranges: OptimalRanges
     initialized: bool
 
@@ -98,7 +108,7 @@ def update_temp(state: State, initialize=False):
   print('state: ')
   print(state)
   state_param = 'temperature'
-  state_update = state.get('target_value') if not initialize else get_random_val_within_range(state, state_param)
+  state_update = state['predictions'].get('target_value') if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
@@ -106,14 +116,14 @@ def update_temp(state: State, initialize=False):
 def update_lights_lux(state: State, initialize=False):
   # Lights are associated with a location + in the range: 100 - 1000 lux
   state_param = 'light_intensity'
-  state_update = state.get('target_value')  if not initialize else get_random_val_within_range(state, state_param)
+  state_update = state['predictions'].get('target_value')  if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
 
 def change_music_volume(state: State, initialize=False):
   state_param = 'volume'
-  state_update = state["target_value"] if not initialize else get_random_val_within_range(state, state_param)
+  state_update = state['predictions'].get('target_value') if not initialize else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
@@ -132,17 +142,17 @@ def update_room_location(state: State, initialize=False):
 
 
 def make_announcement(state: State, initialize=False):
-  announcement = "Welcome to the event!" if initialize else state["target_value"]
+  announcement = "Welcome to the event!" if initialize else state['predictions']["target_value"]
   state['building_event_state'].update({"announcement": announcement})
 
 
 def ff_genre(state: State, initialize=False):
   current_genre = state['building_event_state']['genres']
-  target_value = state['target_value']
+  target_value = state['predictions']['target_value']
   if initialize or len(state['building_event_state']['genres']) == 1:
     # set up playlist
     state['building_event_state'].update({"genres": ['genre_1', 'genre_2', 'genre_3']})
-  elif state['target_value']:
+  elif target_value:
     state['building_event_state'].update({"genres": target_value})
   else:
     state['building_event_state'].update({"genres": current_genre[1:]})
@@ -215,12 +225,12 @@ def call_node_1(state):
         all_functions = state["all_functions"]
         state['building_event_state'] = BuildingEventState.with_defaults(genres=["soul", "funk"])
         state['optimal_ranges'] = OptimalRanges()
-        state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
-        state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
+        state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "soul"])})
+        state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["hip-hop", "dance"])})
         state['event_duration_iterator'] = 0
         state['guests_happy'] = False
-        state['current_sentiment'] = ''
-        state['function_name'] = ''
+        state['current_sentiment'] = 'Sad because they are overheating'
+        state['predictions'] = PredictionState.with_defaults()
         state["messages"] = []
         for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
             state['optimal_ranges']['min_optimum'].update({key: value})
@@ -429,24 +439,26 @@ def call_node_4(state):
     )
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
+    print("PARSED OuTPUT!")
+    print(parsed_output)
     if parsed_output.function_name in ['', 'None'] or parsed_output.target_value in ['', 'None']:
         return state
-    state.update({"function_name": parsed_output.function_name})
+    state['predictions'].update({"function_name": parsed_output.function_name})
     if parsed_output.function_name == 'make_announcement' or parsed_output.function_name == 'ff_genre':
         target_val = parsed_output.target_value
     else:
         target_val = int(parsed_output.target_value)
 
-    state.update({"target_value": target_val})
+    state['predictions'].update({"target_value": target_val})
     return state
 
 
 # 5.(TOOL)  Tool Node:
 def call_node_5(state):
-    function_name = state["function_name"]
-    all_functions = state["all_functions"]
+    function_name = state["predictions"]["function_name"]
+    all_functions =  state["all_functions"]
     if function_name in all_functions:
-        chosen_function = state["all_functions"][state["function_name"]]
+        chosen_function = all_functions[function_name]
         state = chosen_function(state)
     return state
    
