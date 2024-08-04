@@ -51,9 +51,9 @@ class LocationArea(Enum):
 # Helper methods
 def get_optimal_range(state: State, key, subkey=None):
   if subkey is not None:
-    return state['min_optimum'][key][subkey], state['max_optimum'][key][subkey]
+    return state['optimal_ranges']['min_optimum'][key][subkey], state['optimal_ranges']['max_optimum'][key][subkey]
   else:
-    return state['min_optimum'][key], state['max_optimum'][key]
+    return state['optimal_ranges']['min_optimum'][key], state['optimal_ranges']['max_optimum'][key]
 
 
 def get_random_val_within_range(state: State, state_param, subkey=None):

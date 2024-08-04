@@ -39,6 +39,11 @@ class GroupPreferences(TypedDict):
         )
 
 
+class OptimalRanges(TypedDict):
+    min_optimum: BuildingEventState
+    max_optimum: BuildingEventState
+
+
 class State(TypedDict):
     #Input Schema for the State Graph (Used to ingest user data and influence the state graph)
     User_id: int                   #Unique User ID
@@ -59,13 +64,10 @@ class State(TypedDict):
     all_functions: dict            # All the functions that can be used
     function_name: str             # Name of the function to be called
     target_value: float            # The value to call the chosen function with
-    min_optimum: BuildingEventState
-    max_optimum: BuildingEventState
+    optimal_ranges: OptimalRanges
     initialized: bool
 
 os.environ['OPENAI_API_KEY'] = ""
-ENVIRONMENT_VALUES = {}
-OPTIMAL_RANGES = {}
 workflow = StateGraph(State)
 
 
@@ -186,12 +188,13 @@ def call_node_1(state):
     if not state["initialized"]:
         all_functions = state["all_functions"]
         state['building_event_state'] = BuildingEventState()
-        state['min_optimum'] = GroupPreferences.with_defaults(["jazz", "hip-hop"])
-        state['max_optimum'] = GroupPreferences.with_defaults(["jazz", "hip-hop"])
+        state['optimal_ranges'] = OptimalRanges()
+        state['optimal_ranges'].update({'min_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
+        state['optimal_ranges'].update({'max_optimum': GroupPreferences.with_defaults(["jazz", "hip-hop"])})
         state['event_duration_iterator'] = 0
         for key, value in GroupPreferences.with_defaults(["jazz", "hip-hop"]).items():
-            state['min_optimum'].update({key: value})
-            state['max_optimum'].update({key: value})
+            state['optimal_ranges']['min_optimum'].update({key: value})
+            state['optimal_ranges']['max_optimum'].update({key: value})
 
         # Set all building event variables from the optimal ranges
         for function in all_functions.values():
@@ -255,7 +258,7 @@ def call_node_2(state):
     
 
     llm = ChatOpenAI(model="gpt-4o")
-    prompt = PROMPT.format(ENVIRONMENT_VALUES=ENVIRONMENT_VALUES, OPTIMAL_RANGES=OPTIMAL_RANGES)
+    prompt = PROMPT.format(ENVIRONMENT_VALUES=state.get('building_event_state'), OPTIMAL_RANGES=state.get('optimal_ranges'))
 
     return prompt | llm.with_structured_output(Node2OutputSchema)
 
@@ -302,7 +305,7 @@ def call_node_3(state):
 
     llm = ChatOpenAI(model="gpt-4o")
     prompt = PROMPT.format(current_sentiment=state["current_sentiment"])
-    
+
     return prompt | llm.with_structured_output(Node3OutputSchema)
 
 
@@ -373,7 +376,7 @@ def call_node_4(state):
         template=prompt_template
     )
 
-    prompt = PROMPT.format(ENVIRONMENT_VALUES=ENVIRONMENT_VALUES, OPTIMAL_RANGES=OPTIMAL_RANGES, CURRENT_SENTIMENT=CURRENT_SENTIMENT, TOOLS=TOOLS)
+    prompt = PROMPT.format(ENVIRONMENT_VALUES=state.get('building_event_state'), OPTIMAL_RANGES=state.get('optimal_ranges'), CURRENT_SENTIMENT=state['guests_happy'], TOOLS=tools)
 
     llm = ChatOpenAI(model="gpt-4o")
     
