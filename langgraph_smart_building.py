@@ -66,7 +66,7 @@ class GroupPreferences(TypedDict):
 
     @classmethod
     def with_defaults_low(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
-                      volume: int = 5,  location = EventLocation.RECEPTION.name, current_sentiment = "doing so well") -> "GroupPreferences":
+                      volume: int = 7,  location = EventLocation.RECEPTION.name, current_sentiment = "doing so well") -> "GroupPreferences":
         return cls(
             genres=genres,
             temperature=temperature,
@@ -78,7 +78,7 @@ class GroupPreferences(TypedDict):
 
     @classmethod
     def with_defaults_high(cls, genres: list, temperature: float = 80.0, light_intensity: int = 60,
-                          volume: int = 10, location=EventLocation.DANCE_HALL.name,
+                          volume: int = 9, location=EventLocation.DANCE_HALL.name,
                           current_sentiment="Bro this is the best event. I'm obsessed.") -> "GroupPreferences":
         return cls(
             genres=genres,
@@ -130,7 +130,8 @@ workflow = StateGraph(State)
 
 def update_temp(state: State, initialize=False):
   state_param = 'temperature'
-  state_update = state['predictions'].get('target_value') if not initialize else get_random_val_within_range(state, state_param)
+  preset = state['building_event_state']['temperature']
+  state_update = state['predictions'].get('target_value') if not initialize and not preset else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
@@ -138,20 +139,23 @@ def update_temp(state: State, initialize=False):
 def update_lights_lux(state: State, initialize=False):
   # Lights are associated with a location + in the range: 100 - 1000 lux
   state_param = 'light_intensity'
-  state_update = state['predictions'].get('target_value')  if not initialize else get_random_val_within_range(state, state_param)
+  preset = state['building_event_state']['light_intensity']
+  state_update = state['predictions'].get('target_value')  if not initialize and not preset else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
 
 def change_music_volume(state: State, initialize=False):
   state_param = 'volume'
-  state_update = state['predictions'].get('target_value') if not initialize else get_random_val_within_range(state, state_param)
+  preset = state['building_event_state']['volume']
+  state_update = state['predictions'].get('target_value') if not initialize and not preset else get_random_val_within_range(state, state_param)
   if state_update is not None:
     state['building_event_state'].update({state_param: state_update})
 
 
 def update_room_location(state: State, initialize=False):
-  if initialize:
+  preset = state['building_event_state']['location']
+  if initialize and not preset:
     state['building_event_state'].update({"location": EventLocation.RECEPTION.name})
   else:
     state['building_event_state'].update({"location": switch_location_randomly(state['building_event_state']['location'])})
@@ -164,18 +168,19 @@ def update_room_location(state: State, initialize=False):
 
 
 def make_announcement(state: State, initialize=False):
-  announcement = "Welcome to the event!" if initialize else state['predictions']["target_value"]
+  preset = 'announcement' in state['building_event_state']
+  announcement = "Welcome to the event!" if initialize and not preset else state['predictions']["target_value"]
   state['building_event_state'].update({"announcement": announcement})
 
 
 def ff_genre(state: State, initialize=False):
   current_genre = state['building_event_state']['genres']
-  target_value = state['predictions']['target_value']
-  if initialize or len(state['building_event_state']['genres']) == 1:
+  preset = 'genres' in state['building_event_state']
+  if initialize and not preset or len(state['building_event_state']['genres']) == 1:
     # set up playlist
-    state['building_event_state'].update({"genres": ['genre_1', 'genre_2', 'genre_3']})
-  elif target_value:
-    state['building_event_state'].update({"genres": target_value})
+    state['building_event_state'].update({"genres": ['piano', 'electronic', 'alternative', 'symphonic']})
+  elif 'target_value' in state['predictions']:
+    state['building_event_state'].update({"genres": state['predictions'].get('target_value')})
   else:
     state['building_event_state'].update({"genres": current_genre[1:]})
 
@@ -190,10 +195,14 @@ def initialize_guest_event_synergy_state(state: State):
         {'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
 
     # Default building state.  The building variables will move to the optimal ranges
+    # ['piano', 'electronic', 'alternative', 'symphonic']
     # state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
     # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
     state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
 
+    # Initialize building into the required ranges
+    for function in state["all_functions"].values():
+        function(state, initialize=True)
     return state
 
 
@@ -208,9 +217,6 @@ def initialize_system_state(state: State):
     # System variables
     state['event_duration_iterator'] = 0
     state["messages"] = []
-    # Initialize building into the required ranges
-    for function in state["all_functions"].values():
-        function(state, initialize=True)
     return state
 
 
@@ -279,8 +285,8 @@ def call_node_1(state):
     # initialize everything if the state is not been set.
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
-        state = initialize_guest_event_synergy_state(state)
         state = initialize_system_state(state)
+        state = initialize_guest_event_synergy_state(state)
     state.update({"initialized": True})
 
     # randomly choose a function from all_functions (a dictionary with the function name as a string as key, and the function itself as a value)
@@ -434,8 +440,10 @@ def call_node_3(state):
 
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
-    print("TEST parsed_output: ")
+    print("TEST tool and value: ")
     print(parsed_output)
+    print("input state action prediction: ")
+    print(state['building_event_state'])
     state.update({"guests_happy": parsed_output.guests_happy})
     return state
 
