@@ -356,21 +356,24 @@ def call_node_2(state):
 
     If unhappy, you may either:
     a) Directly reference the reason for your unhappiness (e.g., "Ugh, it's way too hot in here!") 
-    Make sure the statement really reflects the environment variable value relative to the ideal value.
+    Make sure the statement really reflects:
+       a. The environment variable value relative to the ideal value.
+       b. The type of change that seems to need to be made.
     b) Express general discontent without specifying the cause (e.g., "This isn't as fun as I thought it would be...")
     It's better to add a bit of detail so the friends know what you're talking about.
 
     If happy, express your enjoyment of the event enthusiastically (e.g., "This is amazing! I'm having the time of my life!")
 
     Examples of possible responses for a valid JSON output object:
-    - "current_sentiment":  "Dude, I can barely hear myself think! The music's way too loud!" (this is unhappy and it is specific to volume)
-    - "current_sentiment":  "Bro these lights are so intense." (this is unhappy and it is specific light intensity)
-    - "current_sentiment":  "I don't know, guys... I'm not really feeling this vibe." (this is unhappy and maybe multiple things are off)
-    - "current_sentiment":  Happy: "Best. Night. Ever! Everything's just perfect!" (this is happy though it isn't clear why)
-    - "current_sentiment":  Happy: "Best. Night. Ever! I love ths song!" (this is happy and it is specific to the genre)
+    - "current_sentiment":  "Dude, I can barely hear myself think! The music's way too loud!" (this is unhappy associated with volume higher than the rage optimum)
+    - "current_sentiment":  "Bro these lights are so intense." (this is unhappy relative to lights being set too high)
+    - "current_sentiment":  "Bro I can hardly see you." (this is unhappy relative to lights being set too low)
+    - "current_sentiment":  "I don't know, guys... I'm not really feeling this vibe - the lights, music, and the energy from this place is just so off right now." (this is unhappy about numerous environment variables)
+    - "current_sentiment":  Happy: "Best. Night. Ever! Everything's just perfect!" (this is happy about numerous environment variables)
+    - "current_sentiment":  Happy: "Best. Night. Ever! I love ths song!" (this is happy and it is specific an ideal environment variable)
     - "current_sentiment":  What a blast! The place has a really warm vibe and I love the flowers!" (this is happy and it is specific to the location)
 
-    Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
+    Do not include any explanation or reasoning outside of this type of evaluation - your entire output should be the in-character response of the concert-goer.
     
      """
     parser = PydanticOutputParser(pydantic_object=Node2OutputSchema)
@@ -456,8 +459,8 @@ def call_node_3(state):
     parsed_output = parser.parse(msg)
     print("TEST tool and value: ")
     print(parsed_output)
-    # print("input state action prediction: ")
-    # print(state['building_event_state'])
+    print("input state action prediction: ")
+    print(state['building_event_state'])
     state.update({"guests_happy": parsed_output.guests_happy})
     return state
 
