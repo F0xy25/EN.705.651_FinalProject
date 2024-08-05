@@ -213,8 +213,8 @@ def initialize_guest_event_synergy_state(state: State):
 
     # Default building state.  The building variables will move to the optimal ranges
     # ['piano', 'electronic', 'alternative', 'symphonic']
-    # state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
-    state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
+    state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+    # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
     # state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
 
     # Initialize building into the required ranges
@@ -349,7 +349,8 @@ def call_node_2(state):
     When responding, use an informal, colloquial tone typical of a concert-goer talking to friends. Your language should be casual, potentially including slang or mild exclamations.
 
     If unhappy, you may either:
-    a) Directly reference the reason for your unhappiness (e.g., "Ugh, it's way too hot in here!")
+    a) Directly reference the reason for your unhappiness (e.g., "Ugh, it's way too hot in here!") 
+    Make sure the statement really reflects the environment variable value relative to the ideal value.
     b) Express general discontent without specifying the cause (e.g., "This isn't as fun as I thought it would be...")
     It's better to add a bit of detail so the friends know what you're talking about.
 
