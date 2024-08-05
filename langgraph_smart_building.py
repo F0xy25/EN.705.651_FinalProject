@@ -432,7 +432,7 @@ def call_node_3(state):
     Remember to focus solely on determining whether the sentiment indicates happiness or sadness in the analysis. 
     Do not consider other emotions or nuances beyond this binary classification.
 
-    Provide your analysis and reasoning before giving the final result."""
+    Just return the output as the valid JSON object with no additional information."""
 
     parser = PydanticOutputParser(pydantic_object=Node3OutputSchema)
     PROMPT = PromptTemplate(
