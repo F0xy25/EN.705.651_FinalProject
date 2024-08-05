@@ -18,16 +18,18 @@ class BuildingEventState(TypedDict):
     volume: int  # In Decibels (70-120)
     genres: list  # List of genres (pop, rock, jazz, classical, hiphop, country, etc.)
     location: str # Location of the event in the building
+    announcement: str
 
     @classmethod
     def with_defaults(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
-                      volume: int = 5, location=EventLocation.RECEPTION.name) -> "BuildingEventState":
+                      volume: int = 5, location=EventLocation.RECEPTION.name, announcement='') -> "BuildingEventState":
         return cls(
             genres=genres,
             temperature=temperature,
             light_intensity=light_intensity,
             volume=volume,
             location=location,
+            announcement=announcement
         )
 
     @classmethod
@@ -132,7 +134,7 @@ def update_temp(state: State, initialize=False):
   state_param = 'temperature'
   preset = state['building_event_state']['temperature']
   state_update = state['predictions'].get('target_value') if not initialize and not preset else get_random_val_within_range(state, state_param)
-  if state_update is not None:
+  if state_update is not None and not initialize:
     state['building_event_state'].update({state_param: state_update})
 
 
@@ -141,7 +143,7 @@ def update_lights_lux(state: State, initialize=False):
   state_param = 'light_intensity'
   preset = state['building_event_state']['light_intensity']
   state_update = state['predictions'].get('target_value')  if not initialize and not preset else get_random_val_within_range(state, state_param)
-  if state_update is not None:
+  if state_update is not None and not initialize:
     state['building_event_state'].update({state_param: state_update})
 
 
@@ -149,7 +151,7 @@ def change_music_volume(state: State, initialize=False):
   state_param = 'volume'
   preset = state['building_event_state']['volume']
   state_update = state['predictions'].get('target_value') if not initialize and not preset else get_random_val_within_range(state, state_param)
-  if state_update is not None:
+  if state_update is not None and not initialize:
     state['building_event_state'].update({state_param: state_update})
 
 
@@ -157,7 +159,7 @@ def update_room_location(state: State, initialize=False):
   preset = state['building_event_state']['location']
   if initialize and not preset:
     state['building_event_state'].update({"location": EventLocation.RECEPTION.name})
-  else:
+  elif not initialize:
     state['building_event_state'].update({"location": switch_location_randomly(state['building_event_state']['location'])})
   # set a default for this
   update_lights_lux(state, initialize=True)
@@ -185,6 +187,20 @@ def ff_genre(state: State, initialize=False):
     state['building_event_state'].update({"genres": current_genre[1:]})
 
 
+def initialize_system_state(state: State):
+    # Agent workflow variables
+    # llm agent-communication variables
+    state['guests_happy'] = False
+    state['current_sentiment'] = ''
+    # Prediction defaults
+    state["prior_predictions"] = []
+    state['predictions'] = PredictionState.with_defaults()
+    # System variables
+    state['event_duration_iterator'] = 0
+    state["messages"] = []
+    return state
+
+
 def initialize_guest_event_synergy_state(state: State):
     # tests:  set up so that initial event state should line up eventually to group preferences.
     # initial group preferences setting optimal ranges
@@ -203,20 +219,6 @@ def initialize_guest_event_synergy_state(state: State):
     # Initialize building into the required ranges
     for function in state["all_functions"].values():
         function(state, initialize=True)
-    return state
-
-
-def initialize_system_state(state: State):
-    # Agent workflow variables
-    # llm agent-communication variables
-    state['guests_happy'] = False
-    state['current_sentiment'] = ''
-    # Prediction defaults
-    state["prior_predictions"] = []
-    state['predictions'] = PredictionState.with_defaults()
-    # System variables
-    state['event_duration_iterator'] = 0
-    state["messages"] = []
     return state
 
 
@@ -300,6 +302,8 @@ def call_node_1(state):
     event_duration_iterator += 1
 
     state.update({"event_duration_iterator": event_duration_iterator})
+    print("Node 1: input state action prediction: ")
+    print(state['building_event_state'])
     return state
 
 
@@ -320,6 +324,8 @@ def call_node_2(state):
     <optimal_ranges>
     {OPTIMAL_RANGES}
     </optimal_ranges>
+    You can use the current_sentiment range preferences but those are gauges for preferred ranges
+    not for the current state.
 
     Compare the current environment values with your optimal ranges. 
     If even a single value falls outside its optimal range, you must express unhappiness. 
@@ -380,6 +386,8 @@ def call_node_2(state):
     parsed_output = parser.parse(msg)
     print('CURRENT SENTIMENT prediction: ' + parsed_output.current_sentiment)
     state.update({"current_sentiment": parsed_output.current_sentiment})
+    print("input state action prediction: ")
+    print(state['building_event_state'])
     return state
 
 
