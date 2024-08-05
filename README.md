@@ -12,7 +12,16 @@
 - [Contributors](#contributors)
 
 ## Overview
-Provide a brief overview of your project, what it does, and why it is useful.
+Our project idea is to build a system which works as a software backbone for a LLM Agent which controls a Smart Building.  Output sequences to this system will include process-based tasks such as temperature, lights, ambiance, energy-processes and logistic management.  The overall idea we’re exploring is the software design of the translation layer for sequencing tasks using the LLM integration as the task generator based on inputs sourced from signals in the building and prompts associated with or developed by those building state details. The deliverable is an application where the system inputs are clearly defined, where outputs are clearly expressed, and where an established metric evaluation expresses the effectiveness of the LLM integration objective to correctly determine and sequence tasks.
+
+Rather than actually integrating with a legitimate smart home for testing, which would require an enormous amount of resources, and likely the integration of multiple data pipelines, we will instead generate proxies for this input data as follows:
+
+- Temperature
+- Light intensity
+- Genre of Music
+- location
+
+To develop the LLM agent to be utilized in this system, the team chose to use LangGraph. Below is a visualization of the agentic system. 
 
 
 ![Alt text](/Presentation_Materials/FinalProjectArchitecture.jpg)
