@@ -179,9 +179,9 @@ def ff_genre(state: State, initialize=False):
   if initialize and not preset or len(state['building_event_state']['genres']) == 1:
     # set up playlist
     state['building_event_state'].update({"genres": ['piano', 'electronic', 'alternative', 'symphonic']})
-  elif 'target_value' in state['predictions']:
+  elif not initialize and 'target_value' in state['predictions']:
     state['building_event_state'].update({"genres": state['predictions'].get('target_value')})
-  else:
+  elif not initialize:
     state['building_event_state'].update({"genres": current_genre[1:]})
 
 
