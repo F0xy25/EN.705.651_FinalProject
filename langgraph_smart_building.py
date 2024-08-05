@@ -212,8 +212,14 @@ def initialize_guest_event_synergy_state(state: State):
         {'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
 
     # Default building state.  The building variables will move to the optimal ranges
-    # ['piano', 'electronic', 'alternative', 'symphonic']
-    state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+    state['building_event_state'] = BuildingEventState.with_defaults(
+        genres=['piano', 'electronic', 'alternative', 'symphonic'],
+        temperature=30,
+        light_intensity=150,
+        volume=1,
+        location=EventLocation.GARDEN
+    )
+    # state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
     # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
     # state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
 
