@@ -39,8 +39,8 @@ class BuildingEventState(TypedDict):
         return cls.with_defaults(genres=genres, light_intensity=light)
 
     @classmethod
-    def with_defaults_low_volume(cls, genres: list, volume: float = 0) -> "BuildingEventState":
-        return cls.with_defaults(genres=genres, volume=volume)
+    def with_defaults_location(cls, genres: list, location: EventLocation = EventLocation.GARDEN) -> "BuildingEventState":
+        return cls.with_defaults(genres=genres, location=location.name)
 
 
 class PredictionState(TypedDict):
@@ -66,7 +66,7 @@ class GroupPreferences(TypedDict):
 
     @classmethod
     def with_defaults_low(cls, genres: list, temperature: float = 70.0, light_intensity: int = 50,
-                      volume: int = 5,  location = EventLocation.RECEPTION.name, current_sentiment = "doing alright") -> "GroupPreferences":
+                      volume: int = 5,  location = EventLocation.RECEPTION.name, current_sentiment = "doing so well") -> "GroupPreferences":
         return cls(
             genres=genres,
             temperature=temperature,
@@ -190,7 +190,10 @@ def initialize_guest_event_synergy_state(state: State):
         {'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
 
     # Default building state.  The building variables will move to the optimal ranges
-    state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+    # state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+    # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
+    state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
+
     return state
 
 
@@ -325,11 +328,8 @@ def call_node_2(state):
     genres (music genres) - is the value within the mood set by the range within preferred genres?
     location - Is the location one of the preferred locations in the min and max optimums
     
-    3. Respond with a JSON object containing:
+    3. Respond with a valid JSON object containing:
     - "current_sentiment": Text about how you feel about the event.  This should be a string.
-     
-    Current Sentiment:
-    {current_sentiment}
     
     When responding, use an informal, colloquial tone typical of a concert-goer talking to friends. Your language should be casual, potentially including slang or mild exclamations.
 
@@ -339,10 +339,10 @@ def call_node_2(state):
 
     If happy, express your enjoyment of the event enthusiastically (e.g., "This is amazing! I'm having the time of my life!")
 
-    Examples of possible responses:
-    - Unhappy: "Dude, I can barely hear myself think! The music's way too loud!"
-    - Unhappy: "I don't know, guys... I'm not really feeling this vibe."
-    - Happy: "Best. Night. Ever! Everything's just perfect!"
+    Examples of possible responses for a valid JSON output object:
+    - "current_sentiment":  "Dude, I can barely hear myself think! The music's way too loud!" (this is unhappy)
+    - "current_sentiment":  "I don't know, guys... I'm not really feeling this vibe." (this is unhappy)
+    - "current_sentiment":  Happy: "Best. Night. Ever! Everything's just perfect!" (this is happy)
 
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
    
@@ -387,17 +387,19 @@ def call_node_3(state):
 
     Based on your analysis, you will determine if the guest is happy or not. If the sentiment analysis indicates that the guest/concert-goer is happy, you will set the 'guests_happy' value to true. If the sentiment analysis indicates that the guest/concert-goer is sad or at least not happy, you will set the 'guests_happy' value to false.
 
-    5. Respond with a JSON object containing:
-    - "guests_happy": The state of the guests happiness which can be true or false.  This should be a string.
-     
-    Guests Happy:
-    {guests_happy}
-
     Examples of positive sentiments might include phrases like "had a great time," "loved the event," "amazing experience," or "can't wait for the next one."
+    An example of the response in this case as part of a valid JSON object:
+    - "guests_happy": 'true'
 
     Examples of negative sentiments might include phrases like "disappointed," "waste of time," "poor organization," or "wouldn't recommend."
+    An example of the response in this case as part of a valid JSON object:
+    - "guests_happy": 'false'
+    
+    5. Respond with a valid JSON object containing:
+    - "guests_happy": The state of the guests happiness which can be true or false.  This should be a string.
 
-    Remember to focus solely on determining whether the sentiment indicates happiness or sadness. Do not consider other emotions or nuances beyond this binary classification.
+    Remember to focus solely on determining whether the sentiment indicates happiness or sadness in the analysis. 
+    Do not consider other emotions or nuances beyond this binary classification.
 
     Provide your analysis and reasoning before giving the final result."""
 
@@ -530,7 +532,10 @@ def call_node_4(state):
     if parsed_output.function_name in ['', 'None'] or parsed_output.target_value in ['', 'None']:
         return state
 
-    if parsed_output.function_name == 'make_announcement' or parsed_output.function_name == 'ff_genre':
+    if (parsed_output.function_name == 'make_announcement'
+            or parsed_output.function_name == 'ff_genre'
+        or parsed_output.function_name == 'update_room_location'
+    ):
         target_val = parsed_output.target_value
     else:
         target_val = int(float(parsed_output.target_value))
