@@ -320,13 +320,17 @@ def call_node_2(state):
     If all values are within their optimal ranges, express happiness and enjoyment of the event.
     
     The key environment variables which are readily evaluated numerically are:
-    temperature
-    light intensity
-    volume
+    a. temperature
+    b. light intensity
+    c. volume
     
-    The environment variables which need some correlation association are:
-    genres (music genres) - is the value within the mood set by the range within preferred genres?
-    location - Is the location one of the preferred locations in the min and max optimums
+    The key environment variables which need some correlation association are:
+    a. genres (music genres) - is the value within the mood set by the range within preferred genres?
+    The mood can be determined by the emotion the music might invoke and the energy is might inspire.
+    b. location - Is the location one of the preferred locations in the min and max optimums?
+    It can be assumed that adapting these affects the preference of the variables which are
+    numerically based within their optimal ranges.
+    
     
     3. Respond with a valid JSON object containing:
     - "current_sentiment": Text about how you feel about the event.  This should be a string.
@@ -336,16 +340,20 @@ def call_node_2(state):
     If unhappy, you may either:
     a) Directly reference the reason for your unhappiness (e.g., "Ugh, it's way too hot in here!")
     b) Express general discontent without specifying the cause (e.g., "This isn't as fun as I thought it would be...")
+    It's better to add a bit of detail so the friends know what you're talking about.
 
     If happy, express your enjoyment of the event enthusiastically (e.g., "This is amazing! I'm having the time of my life!")
 
     Examples of possible responses for a valid JSON output object:
-    - "current_sentiment":  "Dude, I can barely hear myself think! The music's way too loud!" (this is unhappy)
-    - "current_sentiment":  "I don't know, guys... I'm not really feeling this vibe." (this is unhappy)
-    - "current_sentiment":  Happy: "Best. Night. Ever! Everything's just perfect!" (this is happy)
+    - "current_sentiment":  "Dude, I can barely hear myself think! The music's way too loud!" (this is unhappy and it is specific to volume)
+    - "current_sentiment":  "Bro these lights are so intense." (this is unhappy and it is specific light intensity)
+    - "current_sentiment":  "I don't know, guys... I'm not really feeling this vibe." (this is unhappy and maybe multiple things are off)
+    - "current_sentiment":  Happy: "Best. Night. Ever! Everything's just perfect!" (this is happy though it isn't clear why)
+    - "current_sentiment":  Happy: "Best. Night. Ever! I love ths song!" (this is happy and it is specific to the genre)
+    - "current_sentiment":  What a blast! The place has a really warm vibe and I love the flowers!" (this is happy and it is specific to the location)
 
     Do not include any explanation or reasoning outside of is - your entire output should be the in-character response of the concert-goer.
-   
+    
      """
     parser = PydanticOutputParser(pydantic_object=Node2OutputSchema)
     PROMPT = PromptTemplate(
