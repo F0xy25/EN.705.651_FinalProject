@@ -1,4 +1,4 @@
-Prompt Topic:  Activate Interpretable Reason-Based Knowledge
+Prompt Topic:  Activate Interpretable Reason-Based Knowledge Through a Framework of Explainability
 
 Inspiration:  Emergence of unrequested 'reasoning'.  The LLM added announcements to its action path without being
 referenced that tool path in an example, explicitly.  It inferred the importance of the purpose, itself.
@@ -19,12 +19,16 @@ Aspects for evaluation, injected into prompts as a reasoning path logic task:
 - Requested Unique nuances for reasoning
   - What isn't already covered by the logic of this reasoning process described which could be improved by the update?
 
-Prompts:  Include new output variables
+Prompts:
+
+Include new output variables
 -- future relevance
 -- emotional importance of the task
 -- sequencing importance of the task
 -- effects on state
 -- unique reasoning nuances
+
+Model: Temperature adaptations to increase randomization.
 
 Evaluation Range
 -- Numerical examples for state updates

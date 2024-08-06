@@ -550,6 +550,39 @@ def call_node_4(state):
     reason based logic for a selection.  These are reason-based ideas that can be changed by the environment values
     directly associated with optimal ranges, or by the human-like approaches for interacting with guests:
     the announcement or event-bot options.
+    
+    Use these aspects of reasoning:
+
+        Emotional Relevance (LOW/MED/HIGH)
+          - High when there is a combination of building state variables which are out of optimization ranges
+          - Low when just one building state variable is off (this is less overwhelming to the event-goer)
+          - High when there is a high range of divergence from the optimal range
+          - Low when a variable out of range is close to the optimal range (maybe no one can tell)
+    
+        Time Sequencing
+          - How adaptive the update will be to additional updates.  Will changing room location fix all the issues temporarily?
+          - Can multiple steps be resolved by sequencing effectively?
+                Turning down the music could make the room less hot, and changing the music could distract from the temp (correlated
+                variables like that - where one update makes the others seem to go away.
+          - Can unique variables not defined in the user optimization goals be useful to make people happy until others can be
+                updated?  Like looking ahead to see if they can be used to prevent people from getting too grumpy.
+        
+        Wild Card Variables
+          - Wild card variables are the 'event bot' and the 'announcement' options for building state.
+          These are event adaptation options which are correlated with the building environment variables when they are used,
+          but it is less straightforward how they might affect the vibe, and channel the future of the space for increasing
+          happiness levels.  It might not be directly obvious how to use them but they carry significant sway in happiness levels
+          and you can explain why in the explanations for unique reasoning nuances.
+
+        Nuances in reasoning (unique reasoning nuances)
+          - What isn't already covered by the logic of this reasoning process described which could be improved by the update
+          that is the most critical added thing in the reasoning for the update?
+        
+        Use a selection of one to all of the following techniques and include which one in the 'unique reasoning nuances' text
+        along with the specific uniqueness that was discovered from the approach.
+        -- Generate examples which provide context on environmental parameters
+        -- Improve 'self-consistency' (multiple reason-based process approaches and ensemble voting for the best)
+        -- Use look-ahead approaches to find the best option
  
     6. If the current sentiment is negative, follow these steps:
     a. Evaluate PRIOR_PREDICTIONS which has a list of tools and values used by them which have been used to try to make 
@@ -637,9 +670,12 @@ def call_node_4(state):
     )
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
-    print("PARSED OUTPUT!")
+    print('----------------------------------------')
+    print("RESULT:")
     print(parsed_output.function_name)
     print(parsed_output.target_value)
+    print('----------------------------------------')
+    print("REASONING:")
     print('future relevance: ')
     print(parsed_output.future_relevance)
     print('emotional importance of the task: ')
@@ -650,6 +686,7 @@ def call_node_4(state):
     print(parsed_output.effects_on_state)
     print('unique reasoning nuances: ')
     print(parsed_output.unique_reasoning_nuances)
+    print('----------------------------------------')
     if parsed_output.function_name in ['', 'None'] or parsed_output.target_value in ['', 'None']:
         return state
 

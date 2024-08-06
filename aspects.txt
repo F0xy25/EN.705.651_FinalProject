@@ -24,3 +24,9 @@ Wild Card Variables
 Nuances in reasoning (unique reasoning nuances)
   - What isn't already covered by the logic of this reasoning process described which could be improved by the update
   that is the most critical added thing in the reasoning for the update?
+
+Use a selection of one to all of the following techniques and include which one in the 'unique reasoning nuances' text
+along with the specific uniqueness that was discovered from the approach.
+-- Generate examples which provide context on environmental parameters
+-- Improve 'self-consistency' (multiple reason-based process approaches and ensemble voting for the best)
+-- Use look-ahead approaches to find the best option
