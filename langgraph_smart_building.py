@@ -138,7 +138,7 @@ def update_temp(state: State, initialize=False):
       state['building_event_state'].update({state_param: get_random_val_within_range(state, state_param)})
   state_update = 'target_value' in state['predictions']
   if state_update and not initialize:
-    state['building_event_state'].update({state_param: state_update})
+    state['building_event_state'].update({state_param: state['predictions']['target_value']})
 
 
 def update_lights_lux(state: State, initialize=False):
@@ -223,6 +223,13 @@ def initialize_guest_event_synergy_state(state: State):
     # state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
     # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
     # state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
+    print('----------------------------------------')
+    print("OPTIMAL RANGES:")
+    print(state['optimal_ranges'])
+    print('----------------------------------------')
+    print("INITIAL BUILDING STATE:")
+    print(state['building_event_state'])
+    print('----------------------------------------')
 
     # Initialize building into the required ranges
     for function in state["all_functions"].values():
@@ -293,7 +300,7 @@ class Node4OutputSchema(BaseModel):
 
 # 1.(NO-LLM) Changing Environment Simulation Node: 
 def call_node_1(state):
-    print("NODE 1 ENTERED")
+    # print("NODE 1 ENTERED")
     # initialize everything if the state is not been set.
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
@@ -310,7 +317,7 @@ def call_node_1(state):
 
     event_duration_iterator = state.get('event_duration_iterator') # to simulate how long the event is
     event_duration_iterator += 1
-    print("Event Duration Iterator:", event_duration_iterator)
+    # print("Event Duration Iterator:", event_duration_iterator)
     state.update({"event_duration_iterator": event_duration_iterator})
     return state
 
@@ -318,7 +325,7 @@ def call_node_1(state):
 
 # 2.(LLM)    User Sentiment Simulation Node: 
 def call_node_2(state):
-    print("NODE 2 ENTERED")
+    # print("NODE 2 ENTERED")
     prompt_template = """
     You are an AI agent simulating a human attending an event, specifically a concert. You will be given information about the current environment and your preferences. Your task is to respond as if you were communicating with friends at the concert, expressing either happiness or unhappiness based on the environmental conditions.
 
@@ -397,7 +404,7 @@ def call_node_2(state):
 
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
-    print('CURRENT SENTIMENT prediction: ' + parsed_output.current_sentiment)
+    # print('CURRENT SENTIMENT prediction: ' + parsed_output.current_sentiment)
     state.update({"current_sentiment": parsed_output.current_sentiment})
     event_duration_iterator = state.get('event_duration_iterator') # to simulate how long the event is
     event_duration_iterator += 1
@@ -409,7 +416,7 @@ def call_node_2(state):
 
 # 3.(LLM)    Sentiment Analysis Node: 
 def call_node_3(state):
-    print("NODE 3 ENTERED")
+    # print("NODE 3 ENTERED")
     prompt_template = """
     You are a Sentiment Analysis Agent tasked with determining whether an event-goer is happy or sad based on their survey response. You will receive the response in the following variable:
 
@@ -465,17 +472,17 @@ def call_node_3(state):
 
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
-    print("TEST tool and value: ")
-    print(parsed_output)
-    print("input state action prediction: ")
-    print(state['building_event_state'])
+    # print("TEST tool and value: ")
+    # print(parsed_output)
+    # print("input state action prediction: ")
+    # print(state['building_event_state'])
     state.update({"guests_happy": parsed_output.guests_happy})
     return state
 
 
 # 4.(LLM)    Environment Updater Node:
 def call_node_4(state):
-    print("NODE 4 ENTERED")
+    # print("NODE 4 ENTERED")
     prompt_template = """
     You are an AI agent working for an Event and Hospitality business. Your role is to analyze the current environment, compare it to optimal ranges, assess event-goer sentiment, and make adjustments to improve the event experience. Follow these instructions carefully:
 
@@ -568,9 +575,11 @@ def call_node_4(state):
     )
     msg = llm.invoke(prompt).content
     parsed_output = parser.parse(msg)
-    print("PARSED OuTPUT!")
+    print('----------------------------------------')
+    print("RESULT:")
     print(parsed_output.function_name)
     print(parsed_output.target_value)
+    print('----------------------------------------')
     if parsed_output.function_name in ['', 'None'] or parsed_output.target_value in ['', 'None']:
         return state
 
@@ -594,7 +603,11 @@ def call_node_5(state):
     if function_name in all_functions:
         chosen_function = all_functions[function_name]
         state['prior_predictions'] += (state["predictions"], state['building_event_state'])
-        state = chosen_function(state)
+        chosen_function(state)
+        print('----------------------------------------')
+        print("UPDATED STATE:")
+        print(state['building_event_state'])
+        print('----------------------------------------')
     return state
    
 
@@ -627,18 +640,18 @@ workflow.add_node("Node 5: Tool Node", call_node_5)
 # 1. conditional edge to 2. (if event is still going) or 1. to 6. FINISH (if event is over based off an iterator)
 def is_event_done_yet_condition(state):
     if state['event_duration_iterator'] < 15:
-        print("Event is still going:", state['event_duration_iterator'])
+        # print("Event is still going:", state['event_duration_iterator'])
         return "Node 2: User Sentiment Simulation Node"
     else:
-      print("Event is over:", state['event_duration_iterator'])
+      # print("Event is over:", state['event_duration_iterator'])
       return "FINISH"
 
 # 3. conditional edge to 1. (if sentiment of input from 2 is good) or 3. conditional edge to 4. (if sentiment of input from 2 is bad)
 def guest_sentiment_condition(state):
-    print("GUest Sentiment Condition")
+    # print("GUest Sentiment Condition")
     if state['guests_happy'] == 'true':
-        print("The guests are happy")
-        print(state)
+        # print("The guests are happy")
+        # print(state)
         return "Node 1: Changing Environment Simulation Node"
     else:
       return "Node 4: Environment Updater Node"

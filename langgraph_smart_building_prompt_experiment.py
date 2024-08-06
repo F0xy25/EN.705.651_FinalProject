@@ -248,7 +248,13 @@ def initialize_guest_event_synergy_state(state: State):
     state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
     # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
     # state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
-
+    print('----------------------------------------')
+    print("OPTIMAL RANGES:")
+    print(state['optimal_ranges'])
+    print('----------------------------------------')
+    print("INITIAL BUILDING STATE:")
+    print(state['building_event_state'])
+    print('----------------------------------------')
     # Initialize building into the required ranges
     for function in state["all_functions"].values():
         function(state, initialize=True)
@@ -711,7 +717,11 @@ def call_node_5(state):
     if function_name in all_functions:
         chosen_function = all_functions[function_name]
         state['prior_predictions'] += (state["predictions"], state['building_event_state'])
-        state = chosen_function(state)
+        chosen_function(state)
+        print('----------------------------------------')
+        print("UPDATED STATE:")
+        print(state['building_event_state'])
+        print('----------------------------------------')
     return state
    
 
