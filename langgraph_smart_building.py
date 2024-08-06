@@ -6,6 +6,7 @@ from langchain.pydantic_v1 import BaseModel, conlist
 from input_schema_and_utility import get_random_val_within_range, switch_location_randomly, EventLocation
 from langchain.output_parsers import JsonOutputToolsParser, ResponseSchema
 from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.runnables import RunnableConfig
 import random
 import os
 
@@ -260,6 +261,7 @@ class Node4OutputSchema(BaseModel):
     target_value: str
 
 
+   
 
 
 # ========================================================================
@@ -291,6 +293,7 @@ class Node4OutputSchema(BaseModel):
 
 # 1.(NO-LLM) Changing Environment Simulation Node: 
 def call_node_1(state):
+    print("NODE 1 ENTERED")
     # initialize everything if the state is not been set.
     # eventually min optimum + max optimum will be in a prediction node.
     if not state["initialized"]:
@@ -307,7 +310,7 @@ def call_node_1(state):
 
     event_duration_iterator = state.get('event_duration_iterator') # to simulate how long the event is
     event_duration_iterator += 1
-
+    print("Event Duration Iterator:", event_duration_iterator)
     state.update({"event_duration_iterator": event_duration_iterator})
     return state
 
@@ -315,6 +318,7 @@ def call_node_1(state):
 
 # 2.(LLM)    User Sentiment Simulation Node: 
 def call_node_2(state):
+    print("NODE 2 ENTERED")
     prompt_template = """
     You are an AI agent simulating a human attending an event, specifically a concert. You will be given information about the current environment and your preferences. Your task is to respond as if you were communicating with friends at the concert, expressing either happiness or unhappiness based on the environmental conditions.
 
@@ -395,6 +399,9 @@ def call_node_2(state):
     parsed_output = parser.parse(msg)
     print('CURRENT SENTIMENT prediction: ' + parsed_output.current_sentiment)
     state.update({"current_sentiment": parsed_output.current_sentiment})
+    event_duration_iterator = state.get('event_duration_iterator') # to simulate how long the event is
+    event_duration_iterator += 1
+    state.update({"event_duration_iterator": event_duration_iterator})
     # print("input state action prediction: ")
     # print(state['building_event_state'])
     return state
@@ -402,6 +409,7 @@ def call_node_2(state):
 
 # 3.(LLM)    Sentiment Analysis Node: 
 def call_node_3(state):
+    print("NODE 3 ENTERED")
     prompt_template = """
     You are a Sentiment Analysis Agent tasked with determining whether an event-goer is happy or sad based on their survey response. You will receive the response in the following variable:
 
@@ -467,6 +475,7 @@ def call_node_3(state):
 
 # 4.(LLM)    Environment Updater Node:
 def call_node_4(state):
+    print("NODE 4 ENTERED")
     prompt_template = """
     You are an AI agent working for an Event and Hospitality business. Your role is to analyze the current environment, compare it to optimal ranges, assess event-goer sentiment, and make adjustments to improve the event experience. Follow these instructions carefully:
 
@@ -594,9 +603,7 @@ workflow.add_node("Node 2: User Sentiment Simulation Node", call_node_2)
 workflow.add_node("Node 3: Sentiment Analysis Node", call_node_3)
 workflow.add_node("Node 4: Environment Updater Node", call_node_4)
 workflow.add_node("Node 5: Tool Node", call_node_5)
-
-
-
+    
 
 # ========================================================================
 # Edges 
@@ -619,32 +626,44 @@ workflow.add_node("Node 5: Tool Node", call_node_5)
 # DEFINE THE FUNCTIONS FOR CONDITONAL EDGES
 # 1. conditional edge to 2. (if event is still going) or 1. to 6. FINISH (if event is over based off an iterator)
 def is_event_done_yet_condition(state):
-    if state['event_duration_iterator'] < 20:
+    if state['event_duration_iterator'] < 15:
+        print("Event is still going:", state['event_duration_iterator'])
         return "Node 2: User Sentiment Simulation Node"
     else:
+      print("Event is over:", state['event_duration_iterator'])
       return "FINISH"
 
 # 3. conditional edge to 1. (if sentiment of input from 2 is good) or 3. conditional edge to 4. (if sentiment of input from 2 is bad)
 def guest_sentiment_condition(state):
-    if state['guests_happy'] == True:
+    print("GUest Sentiment Condition")
+    if state['guests_happy'] == 'true':
+        print("The guests are happy")
+        print(state)
         return "Node 1: Changing Environment Simulation Node"
     else:
       return "Node 4: Environment Updater Node"
+
+#conditional check for proper modification of environment values
+#def proper_environment_change(state):
+   #get previous 
 
 
 # Define the edges
 workflow.add_edge(
     "__start__", "Node 1: Changing Environment Simulation Node")
+
+workflow.add_edge("Node 1: Changing Environment Simulation Node","Node 2: User Sentiment Simulation Node")
+
 workflow.add_conditional_edges(
-    "Node 1: Changing Environment Simulation Node", is_event_done_yet_condition, {"Node 2: User Sentiment Simulation Node": "Node 2: User Sentiment Simulation Node", "FINISH": END})
+    "Node 2: User Sentiment Simulation Node", is_event_done_yet_condition, {"Node 2: User Sentiment Simulation Node": "Node 3: Sentiment Analysis Node", "FINISH": "__end__"})
 workflow.add_edge(
     "Node 2: User Sentiment Simulation Node", "Node 3: Sentiment Analysis Node")
 workflow.add_conditional_edges(
-    "Node 3: Sentiment Analysis Node", guest_sentiment_condition, {"Node 1: Changing Environment Simulation Node": "Node 1: Changing Environment Simulation Node", "Node 4: Environment Updater Node": "Node 4: Environment Updater Node"})
+    "Node 3: Sentiment Analysis Node", guest_sentiment_condition, {"Node 1: Changing Environment Simulation Node": "__end__", "Node 4: Environment Updater Node": "Node 4: Environment Updater Node"})
 workflow.add_edge(
     "Node 4: Environment Updater Node", "Node 5: Tool Node")
-workflow.add_edge(
-    "Node 5: Tool Node", "Node 2: User Sentiment Simulation Node")
+workflow.add_conditional_edges(
+    "Node 5: Tool Node",is_event_done_yet_condition, {"Node 2: User Sentiment Simulation Node": "Node 2: User Sentiment Simulation Node", "FINISH": "__end__"})
 
 
 
@@ -654,6 +673,7 @@ app = workflow.compile()
 
 response = app.invoke(
     {"all_functions": tools},
+    config=RunnableConfig(recursion_limit=50)
 )
 
 for message in response["messages"]:
