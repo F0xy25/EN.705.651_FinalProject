@@ -152,13 +152,13 @@ workflow = StateGraph(State)
 # Tools
 
 def update_temp(state: State, initialize=False):
-  state_param = 'temperature'
-  preset = state['building_event_state']['temperature']
-  if initialize and not preset:
-      state['building_event_state'].update({state_param: get_random_val_within_range(state, state_param)})
-  state_update = 'target_value' in state['predictions']
-  if state_update and not initialize:
-    state['building_event_state'].update({state_param: state_update})
+    state_param = 'temperature'
+    preset = state['building_event_state']['temperature']
+    if initialize and not preset:
+        state['building_event_state'].update({state_param: get_random_val_within_range(state, state_param)})
+    state_update = 'target_value' in state['predictions']
+    if state_update and not initialize:
+        state['building_event_state'].update({state_param: state['predictions']['target_value']})
 
 
 def update_lights_lux(state: State, initialize=False):
@@ -238,14 +238,14 @@ def initialize_guest_event_synergy_state(state: State):
         {'max_optimum': GroupPreferences.with_defaults_high(["jazz", "soul", "hip-hop", "dance"])})
 
     # Default building state.  The building variables will move to the optimal ranges
-    # state['building_event_state'] = BuildingEventState.with_defaults(
-    #     genres=['piano', 'electronic', 'alternative', 'symphonic'],
-    #     temperature=30,
-    #     light_intensity=150,
-    #     volume=1,
-    #     location=EventLocation.GARDEN
-    # )
-    state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
+    state['building_event_state'] = BuildingEventState.with_defaults(
+        genres=['piano', 'electronic', 'alternative', 'symphonic'],
+        temperature=30,
+        light_intensity=150,
+        volume=1,
+        location=EventLocation.GARDEN
+    )
+    # state['building_event_state'] = BuildingEventState.with_defaults_low_temp(genres=["tiny-bop-pop", "baby-shark"])
     # state['building_event_state'] = BuildingEventState.with_defaults_low_light(genres=["jazz", "soul"])
     # state['building_event_state'] = BuildingEventState.with_defaults_location(genres=["jazz", "soul"])
     print('----------------------------------------')
