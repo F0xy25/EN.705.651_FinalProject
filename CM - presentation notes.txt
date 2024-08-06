@@ -1,0 +1,26 @@
+tasked for making this for multiple guests with different perspectives
+	first thing we need to do is update preferences
+	in the initializer - we have a random amount of users on each path 
+	the main changes are in call node 2 and 3
+	originally parsing was just for the original state and now we have prompting and parsing for each user right now 2 to 4 and that can get 2 to 4 times more expensive and create a loop for each user
+	it's now user's sentiment in call node 2
+
+in node 3 we changed the prompt for each user in the prompt of state 
+
+then we can choose to aggregate the group happiness
+
+or we can test on an individual guest or key guest
+
+we can then set a threshold for the overall happiness
+
+if we set to 0 the code will stop right away after these people start complaining because 0 threshold of happiness is good enough
+
+if we change it to .6 it will take a lot longer to get to that happiness level and will most likely reach a recursion limit
+
+alternatively, we can set it to a key guest which will run much 
+
+the smart building is going off of optimal ranges and we haven't really made a way 
+
+change lines 502 and 503 to change from key guest to aggregate
+
+couldn't get key guest to interact with group properly
