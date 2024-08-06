@@ -166,7 +166,7 @@ def update_room_location(state: State, initialize=False):
   if initialize and not preset:
     state['building_event_state'].update({"location": EventLocation.RECEPTION.name})
   elif not initialize:
-    state['building_event_state'].update({"location": switch_location_randomly(state['building_event_state']['location'])})
+    state['building_event_state'].update({"location": state['predictions']["target_value"]})
   # set a default for this
   update_lights_lux(state, initialize=True)
 
